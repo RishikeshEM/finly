@@ -63,7 +63,7 @@ module "database" {
   rds_engine_version       = var.rds_engine_version
   rds_multi_az             = var.rds_multi_az
   db_user                  = var.db_user
-  db_password              = var.db_password
+  db_password              = var.database_password
   db_name                  = var.db_name
   enable_backups           = var.environment != "demo"
   backup_retention_days    = var.backup_retention_days

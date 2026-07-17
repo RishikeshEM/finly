@@ -77,11 +77,6 @@ variable "db_user" {
   sensitive   = true
 }
 
-variable "db_password" {
-  description = "Database master password (minimum 8 characters)"
-  type        = string
-  sensitive   = true
-}
 
 variable "db_name" {
   description = "Database name"
@@ -256,7 +251,7 @@ variable "stripe_webhook_secret" {
 }
 
 variable "database_password" {
-  description = "Database password"
+  description = "Database master password (minimum 8 characters, used for both RDS and application connection)"
   type        = string
   sensitive   = true
 }

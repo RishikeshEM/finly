@@ -171,16 +171,22 @@ jobs:
           terraform validate
 
       - name: Terraform plan (demo)
+        env:
+          TF_VAR_database_password: ${{ secrets.DB_PASSWORD_CI_PLANNING }}
         run: |
           cd infrastructure/terraform
           terraform plan -var-file=demo.tfvars -out=tfplan-demo
 
       - name: Terraform plan (staging)
+        env:
+          TF_VAR_database_password: ${{ secrets.DB_PASSWORD_CI_PLANNING }}
         run: |
           cd infrastructure/terraform
           terraform plan -var-file=staging.tfvars -out=tfplan-staging
 
       - name: Terraform plan (production)
+        env:
+          TF_VAR_database_password: ${{ secrets.DB_PASSWORD_CI_PLANNING }}
         run: |
           cd infrastructure/terraform
           terraform plan -var-file=production.tfvars -out=tfplan-production
@@ -303,6 +309,8 @@ jobs:
             -backend-config="dynamodb_table=terraform-locks"
 
       - name: Plan Infrastructure Changes
+        env:
+          TF_VAR_database_password: ${{ secrets.DB_PASSWORD_DEPLOYMENT }}
         run: |
           cd infrastructure/terraform
           terraform plan \

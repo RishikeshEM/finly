@@ -1,0 +1,125 @@
+{
+  "module": "db",
+  "stack": "postgres",
+  "description": "PostgreSQL database schema, migrations, and connection config",
+  "root_level_dependencies": [
+    {
+      "name": "pg",
+      "version": "^8.11.0",
+      "type": "npm",
+      "scope": "backend",
+      "reason": "PostgreSQL client library for Node.js backend service"
+    },
+    {
+      "name": "ts-node",
+      "version": "^10.9.0",
+      "type": "npm",
+      "scope": "devDependencies",
+      "reason": "TypeScript runner for migration scripts during CI/CD and local development"
+    }
+  ],
+  "root_level_env_vars": [
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "tier": ["staging", "production"],
+      "description": "Full PostgreSQL connection string (postgresql://...)",
+      "sensitive": true
+    },
+    {
+      "name": "DB_HOST",
+      "required": false,
+      "tier": ["development", "demo"],
+      "default": "localhost",
+      "description": "PostgreSQL host (used if DATABASE_URL not set)",
+      "sensitive": false
+    },
+    {
+      "name": "DB_PORT",
+      "required": false,
+      "tier": ["development", "demo"],
+      "default": "5432",
+      "description": "PostgreSQL port",
+      "sensitive": false
+    },
+    {
+      "name": "DB_USER",
+      "required": true,
+      "tier": ["development", "demo", "staging", "production"],
+      "description": "PostgreSQL username (used if DATABASE_URL not set)",
+      "sensitive": true
+    },
+    {
+      "name": "DB_PASSWORD",
+      "required": true,
+      "tier": ["development", "demo", "staging", "production"],
+      "description": "PostgreSQL password (used if DATABASE_URL not set)",
+      "sensitive": true
+    },
+    {
+      "name": "DB_NAME",
+      "required": false,
+      "tier": ["development", "demo", "staging", "production"],
+      "default": "finly",
+      "description": "PostgreSQL database name",
+      "sensitive": false
+    },
+    {
+      "name": "DB_SSL",
+      "required": false,
+      "tier": ["staging", "production"],
+      "default": "false",
+      "description": "Enable SSL/TLS for database connection (true/false)",
+      "sensitive": false
+    },
+    {
+      "name": "DB_SSL_CERT_PATH",
+      "required": false,
+      "tier": ["staging", "production"],
+      "description": "Path to CA certificate file (if using custom certificates)",
+      "sensitive": false
+    },
+    {
+      "name": "DB_SSL_REJECT_UNAUTHORIZED",
+      "required": false,
+      "tier": ["development", "demo", "staging", "production"],
+      "default": "true",
+      "description": "Reject unauthorized SSL certificates (true/false)",
+      "sensitive": false
+    },
+    {
+      "name": "DB_POOL_MAX",
+      "required": false,
+      "tier": ["development", "demo", "staging", "production"],
+      "default": "10",
+      "description": "Maximum database connection pool size",
+      "sensitive": false
+    }
+  ],
+  "gitignore": [
+    "node_modules/",
+    "dist/",
+    ".env",
+    ".env.local",
+    ".env.*.local"
+  ],
+  "ci_cd_steps": [
+    {
+      "name": "migrate-database",
+      "command": "npm run migrate",
+      "cwd": "packages/db",
+      "description": "Apply pending database migrations",
+      "tier": ["staging", "production"],
+      "timeout_seconds": 300,
+      "on_failure": "block"
+    }
+  ],
+  "notes": [
+    "Migrations are applied in order via src/migrate.ts and tracked in schema_migrations table",
+    "All monetary amounts stored as integer cents, never floating-point",
+    "Foreign keys use ON DELETE CASCADE for user-owned tables, RESTRICT for category/transaction references",
+    "Soft-delete support for GDPR compliance via deleted_at column on users table",
+    "Indexes optimized for dashboard aggregation and transaction history pagination",
+    "Connection pool tunable via DB_POOL_MAX, DB_IDLE_TIMEOUT_MS, DB_CONNECTION_TIMEOUT_MS"
+  ]
+}

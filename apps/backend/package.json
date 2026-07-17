@@ -1,0 +1,50 @@
+{
+  "name": "@finly/backend",
+  "version": "1.0.0",
+  "description": "Finly Personal Finance Tracker - Backend API",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0",
+    "jsonwebtoken": "^9.0.1",
+    "bcrypt": "^5.1.1",
+    "redis": "^4.6.10",
+    "pg": "^8.10.0",
+    "joi": "^17.9.2",
+    "uuid": "^9.0.0",
+    "bull": "^4.11.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.3.1",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/bcrypt": "^5.0.0",
+    "@types/uuid": "^9.0.2",
+    "typescript": "^5.1.3",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.11",
+    "@typescript-eslint/parser": "^5.59.11",
+    "eslint": "^8.44.0",
+    "jest": "^29.5.0",
+    "@types/jest": "^29.5.2",
+    "ts-jest": "^29.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

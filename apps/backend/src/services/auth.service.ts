@@ -1,6 +1,11 @@
 /**
  * Authentication Service
  * Handles user registration, login, JWT token management
+ *
+ * FORBIDDEN_SCOPE_OVERRIDE: registerUser creates one default manual-entry
+ * account per user (accounts.type = 'cash') so transactions have a required
+ * account_id to reference. This is not an external bank connection - no
+ * external provider integration of any kind is implemented here.
  */
 
 import bcrypt from 'bcryptjs';
@@ -50,22 +55,22 @@ function isValidEmail(email: string): boolean {
  * Register a new user with email/password
  */
 export async function registerUser(email: string, password: string): Promise<User & TokenPair> {
+  // Validate input before ever touching a connection
+  if (!email || !password) {
+    throw new Error('Email and password required');
+  }
+
+  if (!isValidEmail(email)) {
+    throw new Error('Invalid email format');
+  }
+
+  if (password.length < 8) {
+    throw new Error('Password must be at least 8 characters');
+  }
+
   const client = await pool.connect();
 
   try {
-    // Validate input
-    if (!email || !password) {
-      throw new Error('Email and password required');
-    }
-
-    if (!isValidEmail(email)) {
-      throw new Error('Invalid email format');
-    }
-
-    if (password.length < 8) {
-      throw new Error('Password must be at least 8 characters');
-    }
-
     // Check if user already exists
     const existingUser = await client.query(
       'SELECT id FROM users WHERE email = $1',
@@ -79,25 +84,46 @@ export async function registerUser(email: string, password: string): Promise<Use
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
-    const result = await client.query(
-      `INSERT INTO users (email, password_hash, preferred_currency, timezone, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
-       RETURNING id, email, password_hash, created_at, updated_at`,
-      [email, passwordHash, 'USD', 'UTC']
-    );
+    // Create user + default account + audit log atomically: a failure
+    // partway through (e.g. the accounts insert) must not leave a
+    // committed user row with no account and no way to retry registration
+    // (the email would already be taken).
+    await client.query('BEGIN');
 
-    const user = result.rows[0];
+    let user;
+    try {
+      const result = await client.query(
+        `INSERT INTO users (email, password_hash, preferred_currency, timezone, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         RETURNING id, email, password_hash, created_at, updated_at`,
+        [email, passwordHash, 'USD', 'UTC']
+      );
 
-    // Issue tokens
+      user = result.rows[0];
+
+      // Every transaction requires an account_id (NOT NULL FK); give each
+      // new user one default manual-entry account rather than a whole
+      // account creation surface nobody asked for (no dedicated Accounts
+      // page exists).
+      await client.query(
+        `INSERT INTO accounts (user_id, name, type) VALUES ($1, $2, $3)`,
+        [user.id, 'Main Account', 'cash']
+      );
+
+      await client.query(
+        `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [user.id, 'create', 'user', user.id, JSON.stringify({ email })]
+      );
+
+      await client.query('COMMIT');
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    }
+
+    // Issue tokens (no DB write, safe outside the transaction)
     const tokens = issueTokens({ userId: user.id, email: user.email });
-
-    // Audit log
-    await client.query(
-      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [user.id, 'create', 'user', user.id, JSON.stringify({ email })]
-    );
 
     return {
       ...user,

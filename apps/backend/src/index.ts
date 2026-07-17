@@ -23,6 +23,7 @@ import config from './config/env';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
+import { accountsRouter } from './routes/accounts';
 import { dashboardRouter } from './routes/dashboard';
 import { transactionsRouter } from './routes/transactions';
 import { categoriesRouter } from './routes/categories';
@@ -67,6 +68,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/accounts', accountsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/transactions', transactionsRouter);
 app.use('/api/v1/categories', categoriesRouter);

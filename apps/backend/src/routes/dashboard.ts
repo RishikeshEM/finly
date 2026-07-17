@@ -207,6 +207,22 @@ async function queryDashboardFromDatabase(userId: string) {
       [userId]
     );
 
+    // Cash flow - daily income/expense series over the last 30 days, for the
+    // Dashboard's cash-flow area chart (frontend-spec §2.3)
+    const cashFlowResult = await client.query(
+      `
+      SELECT t.date,
+        COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount_cents ELSE 0 END), 0) as income_cents,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as expense_cents
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      WHERE a.user_id = $1 AND t.date >= (CURRENT_DATE - INTERVAL '30 days')
+      GROUP BY t.date
+      ORDER BY t.date ASC
+    `,
+      [userId]
+    );
+
     // Widgets derived from recurring transactions (backend-spec §1) - no dedicated table
     const recurringResult = await client.query(
       `
@@ -228,6 +244,11 @@ async function queryDashboardFromDatabase(userId: string) {
         monthlyExpenses,
         savings: monthlyIncome - monthlyExpenses,
         netWorth: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
+      },
+      cashFlow: {
+        labels: cashFlowResult.rows.map((row) => row.date),
+        income: cashFlowResult.rows.map((row) => parseInt(row.income_cents)),
+        expenses: cashFlowResult.rows.map((row) => parseInt(row.expense_cents)),
       },
       budgetsSummary: {
         topBudgets: budgetsResult.rows.map((row) => ({

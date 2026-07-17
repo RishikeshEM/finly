@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,22 +20,42 @@ export function TransactionsPage() {
   const { data: accounts } = useAccounts();
   const { data: categories } = useCategories();
   const deleteTransaction = useDeleteTransaction();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [page, setPage] = useState(0);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+  // Page is URL-driven (?page=N, 1-indexed) so a deep link is meaningful and
+  // reproducible, not just in-memory client state (FE-EC-09).
+  const rawPageParam = parseInt(searchParams.get('page') || '1', 10);
+  const page = Number.isFinite(rawPageParam) && rawPageParam >= 1 ? rawPageParam - 1 : 0;
 
   const { data, isLoading } = useTransactions(PAGE_SIZE, page * PAGE_SIZE);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.pagination.total / PAGE_SIZE)) : 1;
 
   // FE-EC-09: a deep link to a page number beyond total pages falls back to
-  // the last valid page, rather than rendering an empty/broken page.
+  // the last valid page, rather than rendering an empty/broken page. Done
+  // via a URL replace in an effect, not a setState call during render.
   const effectivePage = Math.min(page, totalPages - 1);
-  if (effectivePage !== page && !isLoading) {
-    setPage(effectivePage);
-  }
+
+  useEffect(() => {
+    if (!isLoading && effectivePage !== page) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', String(effectivePage + 1));
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, effectivePage, page]);
+
+  const goToPage = (zeroIndexedPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', String(zeroIndexedPage + 1));
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const categoryNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -168,7 +189,7 @@ export function TransactionsPage() {
             {data.pagination.total} transactions
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={effectivePage === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            <Button variant="outline" size="sm" disabled={effectivePage === 0} onClick={() => goToPage(Math.max(0, effectivePage - 1))}>
               Previous
             </Button>
             <Button variant="primary" size="sm" disabled>
@@ -178,7 +199,7 @@ export function TransactionsPage() {
               variant="outline"
               size="sm"
               disabled={effectivePage >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              onClick={() => goToPage(Math.min(totalPages - 1, effectivePage + 1))}
             >
               Next
             </Button>

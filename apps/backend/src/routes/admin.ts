@@ -9,248 +9,134 @@
  * control is implemented — the role scaffolding exists structurally but is not active.
  *
  * Endpoints (Admin/Super Admin roles only):
- * - GET /api/v1/admin/users (user management dashboard)
- * - GET /api/v1/admin/subscriptions (subscription/plan tracking)
- * - GET /api/v1/admin/revenue (revenue dashboard, MRR/ARR KPIs)
- * - GET /api/v1/admin/audit-logs (audit trail for compliance/security)
- * - GET /api/v1/admin/feature-flags (feature flag management)
- * - POST /api/v1/admin/feature-flags (enable/disable feature flags)
+ * - GET /api/v1/admin/users
+ * - GET /api/v1/admin/subscriptions
+ * - GET /api/v1/admin/revenue
+ * - GET /api/v1/admin/audit-logs
+ * - GET/POST /api/v1/admin/feature-flags (POST requires super_admin)
  *
+ * RBAC across all four PRD roles (User, Family Admin, Admin, Super Admin).
  * Note: Admin panel UI is not in MVP (frontend-spec §2.10), but the API surface
- * exists for ops use and future UI. RBAC enforcement blocks non-admin access.
+ * exists for ops use and future UI.
  *
  * Latency targets (backend-spec §4.1):
- * - p50 < 120ms, p95 < 300ms, p99 < 800ms (dashboards are read-only, fast)
+ * - p50 < 120ms, p95 < 300ms, p99 < 800ms
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
+import { authMiddleware, requireRole, AuthRequest } from '../middleware/auth.middleware';
+import {
+  getUsers,
+  getSubscriptionsSummary,
+  getRevenueMetrics,
+  getAuditLogs,
+  getFeatureFlags,
+  updateFeatureFlags,
+} from '../services/admin.service';
 
 export const adminRouter = Router();
 
-/**
- * Middleware: Admin-only access control
- *
- * All routes in this module require either Admin or Super Admin role.
- * This should be enforced via a middleware function that:
- * 1. Verifies JWT token
- * 2. Extracts user_id and role from token
- * 3. Checks if role is 'admin' or 'super_admin'
- * 4. Returns 403 Forbidden if not authorized
- */
-function requireAdmin(req: Request, res: Response, next: Function) {
-  // TODO: Implement admin role check
-  // - For now, stub all admin routes
-  // - Actual implementation in middleware layer
-  next();
-}
+// All admin routes require authentication + admin/super_admin role
+adminRouter.use(authMiddleware);
+adminRouter.use(requireRole(['admin', 'super_admin']));
 
 /**
  * GET /api/v1/admin/users
  * List all users with account information and subscription status
- *
- * Query parameters:
- * - search: search by email or name
- * - role: filter by role (user, family_admin, admin, super_admin)
- * - planId: filter by subscription plan
- * - limit: pagination (default 50)
- * - offset: pagination
- *
- * Response:
- * [
- *   {
- *     id: uuid,
- *     email: string,
- *     name: string,
- *     role: string,
- *     createdAt: timestamp,
- *     lastLoginAt: timestamp,
- *     currentPlan: 'free' | 'pro' | 'family',
- *     accountStatus: 'active' | 'suspended' | 'deleted',
- *   }
- * ]
  */
-adminRouter.get('/users', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement user list endpoint
-  // - Verify JWT token
-  // - Check Admin role
-  // - Query users table with optional filters (search, role, planId)
-  // - Join with payments table to get current plan
-  // - Apply pagination
-  // - Return user list
-  //
-  // Latency budget: p50 < ~150ms
-  res.status(200).json({
-    message: 'Get users endpoint - not yet implemented',
-    users: [],
-    pagination: { limit: 50, offset: 0, total: 0 },
-  });
+adminRouter.get('/users', async (req: AuthRequest, res: Response) => {
+  try {
+    const { search, role, planId } = req.query;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const users = await getUsers(search as string, role as string, planId as string, limit, offset);
+    res.status(200).json({ users, pagination: { limit, offset } });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * GET /api/v1/admin/subscriptions
  * List active subscriptions and plan distribution
- *
- * Response:
- * {
- *   totalUsers: number,
- *   byPlan: {
- *     free: number,
- *     pro: number,
- *     family: number,
- *   },
- *   churnRate: percentage,
- *   activeSubscriptions: [
- *     {
- *       userId: uuid,
- *       email: string,
- *       plan: string,
- *       status: 'active' | 'past_due' | 'canceled',
- *       startDate: timestamp,
- *       renewalDate: timestamp,
- *       mrr: cents,
- *     }
- *   ]
- * }
  */
-adminRouter.get('/subscriptions', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement subscriptions dashboard
-  // - Verify JWT token
-  // - Check Admin role
-  // - Query users and payments tables
-  // - Compute aggregates: total users, by plan, churn rate
-  // - Return summary and list of active subscriptions
-  //
-  // Latency budget: p50 < ~200ms (aggregation query)
-  res.status(200).json({
-    message: 'Get subscriptions endpoint - not yet implemented',
-    subscriptions: null,
-  });
+adminRouter.get('/subscriptions', async (req: AuthRequest, res: Response) => {
+  try {
+    const summary = await getSubscriptionsSummary();
+    res.status(200).json(summary);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * GET /api/v1/admin/revenue
  * Revenue KPIs for business analytics
- *
- * Response:
- * {
- *   mrr: cents (Monthly Recurring Revenue),
- *   arr: cents (Annual Recurring Revenue),
- *   arpu: cents (Average Revenue Per User),
- *   ltv: cents (estimated Lifetime Value),
- *   totalCollected: cents,
- *   failedPayments: count,
- * }
  */
-adminRouter.get('/revenue', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement revenue dashboard
-  // - Verify JWT token
-  // - Check Admin role
-  // - Query payments table for completed transactions
-  // - Compute MRR (sum of active monthly subscriptions)
-  // - Compute ARR (MRR * 12)
-  // - Compute ARPU (total revenue / active users)
-  // - Return revenue metrics
-  //
-  // Latency budget: p50 < ~200ms
-  res.status(200).json({
-    message: 'Get revenue endpoint - not yet implemented',
-    revenue: null,
-  });
+adminRouter.get('/revenue', async (req: AuthRequest, res: Response) => {
+  try {
+    const revenue = await getRevenueMetrics();
+    res.status(200).json(revenue);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * GET /api/v1/admin/audit-logs
  * Audit trail for compliance and security review
- *
- * Query parameters:
- * - entityType: filter by entity (users, transactions, budgets, etc.)
- * - action: filter by action type (created, updated, deleted, etc.)
- * - userId: filter by user who performed action
- * - startDate: filter by date range
- * - endDate: filter by date range
- * - limit: pagination (default 100)
- * - offset: pagination
- *
- * Response:
- * [
- *   {
- *     id: uuid,
- *     userId: uuid,
- *     action: string,
- *     entityType: string,
- *     entityId: uuid,
- *     diff: object (what changed),
- *     createdAt: timestamp,
- *   }
- * ]
  */
-adminRouter.get('/audit-logs', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement audit logs endpoint
-  // - Verify JWT token
-  // - Check Admin role
-  // - Query audit_logs table with optional filters
-  // - Apply pagination
-  // - Return audit trail (append-only, never modified or deleted)
-  //
-  // Latency budget: p50 < ~150ms
-  res.status(200).json({
-    message: 'Get audit logs endpoint - not yet implemented',
-    auditLogs: [],
-    pagination: { limit: 100, offset: 0, total: 0 },
-  });
+adminRouter.get('/audit-logs', async (req: AuthRequest, res: Response) => {
+  try {
+    const { entityType, action, userId, startDate, endDate } = req.query;
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const auditLogs = await getAuditLogs(
+      entityType as string,
+      action as string,
+      userId as string,
+      startDate as string,
+      endDate as string,
+      limit,
+      offset
+    );
+
+    res.status(200).json({ auditLogs, pagination: { limit, offset } });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * GET /api/v1/admin/feature-flags
- * Get current feature flag state across the system
- *
- * Response:
- * {
- *   'feature.name': boolean,
- *   'feature.name2': boolean,
- *   ...
- * }
+ * Get current feature flag state across all plan tiers
  */
-adminRouter.get('/feature-flags', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement feature flag retrieval
-  // - Verify JWT token
-  // - Check Admin role
-  // - Query plans.feature_flags for all plan tiers
-  // - Return aggregated feature flag state
-  //
-  // Latency budget: p50 < ~80ms
-  res.status(200).json({
-    message: 'Get feature flags endpoint - not yet implemented',
-    featureFlags: {},
-  });
+adminRouter.get('/feature-flags', async (req: AuthRequest, res: Response) => {
+  try {
+    const featureFlags = await getFeatureFlags();
+    res.status(200).json({ featureFlags });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * POST /api/v1/admin/feature-flags
- * Update feature flags for a plan tier
- *
- * Request body:
- * {
- *   planId: 'free' | 'pro' | 'family',
- *   flags: {
- *     'feature.name': boolean,
- *     ...
- *   }
- * }
+ * Update feature flags for a plan tier (super_admin only - more restrictive than Admin)
  */
-adminRouter.post('/feature-flags', requireAdmin, async (req: Request, res: Response) => {
-  // TODO: Implement feature flag update
-  // - Verify JWT token
-  // - Check Super Admin role (more restrictive than Admin)
-  // - Validate input (planId, flags)
-  // - Update plans.feature_flags for the specified plan
-  // - Invalidate any cached feature flag state
-  // - Audit log: feature_flags_updated
-  // - Return updated flags
-  //
-  // Latency budget: p50 < ~100ms
-  res.status(200).json({
-    message: 'Update feature flags endpoint - not yet implemented',
-    featureFlags: {},
-  });
+adminRouter.post('/feature-flags', requireRole(['super_admin']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { planId, flags } = req.body;
+
+    if (!planId || !flags) {
+      return res.status(400).json({ error: 'planId and flags are required' });
+    }
+
+    const updated = await updateFeatureFlags(req.user!.userId, planId, flags);
+    res.status(200).json(updated);
+  } catch (error) {
+    res.status(error instanceof Error && error.message === 'Plan not found' ? 404 : 400).json({ error: (error as Error).message });
+  }
 });

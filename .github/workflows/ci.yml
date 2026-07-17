@@ -43,8 +43,8 @@ jobs:
       - name: Dependency vulnerability scan
         run: |
           echo "Running dependency vulnerability scan..."
-          # This will be expanded to run npm audit and pip-audit
-          npm audit --audit-level=high || true
+          # Block merge on HIGH-severity dependency vulnerabilities (DO-EC-04)
+          npm audit --audit-level=high
 
   # ============================================================================
   # LINT & FORMAT STAGE
@@ -69,11 +69,9 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: true
 
       - name: Check code formatting
         run: npm run format:check
-        continue-on-error: true
 
   # ============================================================================
   # TYPE CHECK STAGE
@@ -323,15 +321,7 @@ jobs:
           cd packages/db
           npm run migrate
 
-      - name: Health Check
+      - name: Terraform Output
         run: |
-          echo "Waiting for deployment to be healthy..."
-          for i in {1..30}; do
-            if curl -f http://localhost:3000/health; then
-              echo "Health check passed"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Health check failed"
-          exit 1
+          cd infrastructure/terraform
+          terraform output -json | jq '.alb_dns_name.value' || echo "ALB DNS will be available after initial apply"

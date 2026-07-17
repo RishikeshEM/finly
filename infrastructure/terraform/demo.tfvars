@@ -34,7 +34,9 @@ frontend_docker_image = "finly-frontend:latest"
 # Monitoring - Minimal for cost
 log_retention_days = 1
 
-# Secrets - Use example/test values (CHANGE IN PRODUCTION)
+# Secrets - Provided via environment variables (TF_VAR_database_password, etc.)
+# NEVER hardcode passwords here
+database_password  = "" # Set via: export TF_VAR_database_password="value"
 jwt_access_secret  = "demo_jwt_access_secret_change_me_min_32_chars"
 jwt_refresh_secret = "demo_jwt_refresh_secret_change_me_min_32_chars"
 

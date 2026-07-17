@@ -35,7 +35,8 @@ frontend_docker_image = "finly-frontend:latest"
 log_retention_days = 7
 
 # Secrets - Must be provided via terraform variable or AWS Secrets Manager
-# DO NOT hardcode real secrets here - use tfvars.secret or environment variables
+# DO NOT hardcode real secrets here - use environment variables
+database_password  = "" # Set via: export TF_VAR_database_password="value"
 jwt_access_secret  = "staging_jwt_access_secret_changeme"
 jwt_refresh_secret = "staging_jwt_refresh_secret_changeme"
 

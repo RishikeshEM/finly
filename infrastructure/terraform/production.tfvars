@@ -38,6 +38,7 @@ log_retention_days = 90
 # Secrets - MUST be provided via AWS Secrets Manager or encrypted variable
 # NEVER commit real secrets to this file
 # Use: aws secretsmanager create-secret or terraform variable files with restricted access
+database_password  = ""
 jwt_access_secret  = ""
 jwt_refresh_secret = ""
 

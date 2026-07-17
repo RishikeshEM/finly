@@ -111,8 +111,10 @@ export function BudgetFormModal({ budget, onClose }: BudgetFormModalProps) {
           )}
 
           <div>
-            <label className="block text-sm font-semibold mb-2">Limit ({user?.preferred_currency || 'USD'})</label>
-            <Input type="number" step="0.01" min="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} required />
+            <label htmlFor="budget-limit" className="block text-sm font-semibold mb-2">
+              Limit ({user?.preferred_currency || 'USD'})
+            </label>
+            <Input id="budget-limit" type="number" step="0.01" min="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} required />
           </div>
 
           <div className="flex gap-3 pt-2">

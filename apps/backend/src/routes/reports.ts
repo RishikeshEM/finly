@@ -20,132 +20,59 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
+import { getReportAggregate, enqueueExportJob, getExportJobStatus } from '../services/reports.service';
 
 export const reportsRouter = Router();
+reportsRouter.use(authMiddleware);
 
 /**
  * GET /api/v1/reports
  * Get on-the-fly transaction aggregates and summaries for a date range
- *
- * Query parameters:
- * - startDate: ISO date string (default: 30 days ago)
- * - endDate: ISO date string (default: today)
- * - categoryId?: filter by specific category
- *
- * Response:
- * {
- *   period: { startDate, endDate },
- *   totalIncome: cents,
- *   totalExpenses: cents,
- *   netFlow: cents,
- *   byCategory: [{ categoryName, income, expenses, net }],
- *   dailyBreakdown: [{ date, income, expenses, net }],
- * }
  */
-reportsRouter.get('/', async (req: Request, res: Response) => {
-  // TODO: Implement report aggregation
-  // - Verify JWT token
-  // - Extract user_id from token
-  // - Validate query parameters (startDate, endDate, optional categoryId)
-  // - Query Redis cache first (key: report:{user_id}:{startDate}:{endDate})
-  // - If cache miss:
-  //   - Query transactions table for the date range
-  //   - Sum by category, by type (income/expense)
-  //   - Group by daily breakdown
-  //   - Compute net flow (income - expenses)
-  //   - Cache result for 1 hour
-  // - Return aggregated report
-  //
-  // Latency budget: p50 < ~150ms (cached or fast DB query)
-  res.status(200).json({
-    message: 'Get reports aggregates endpoint - not yet implemented',
-    report: null,
-  });
+reportsRouter.get('/', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const startDate = (req.query.startDate as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const endDate = (req.query.endDate as string) || new Date().toISOString().split('T')[0];
+
+    const report = await getReportAggregate(userId, startDate, endDate);
+    res.status(200).json(report);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * POST /api/v1/reports/export
  * Enqueue an async job to generate and export a report (PDF/CSV/Excel)
- *
- * Request body:
- * {
- *   format: 'pdf' | 'csv' | 'excel',
- *   startDate: ISO date string,
- *   endDate: ISO date string,
- *   includeCategories?: ['category1', 'category2'] (optional filter),
- * }
- *
- * Response:
- * {
- *   jobId: uuid,
- *   status: 'queued',
- *   estimatedCompletionTime: ISO timestamp,
- * }
  */
-reportsRouter.post('/export', async (req: Request, res: Response) => {
-  // TODO: Implement report export job enqueue
-  // - Verify JWT token
-  // - Extract user_id from token
-  // - Validate input (format, date range)
-  // - Create a BullMQ/queue job with:
-  //   - user_id
-  //   - format (pdf/csv/excel)
-  //   - date range
-  //   - optional category filters
-  // - Job will be processed by a separate queue worker
-  // - Return job ID immediately
-  // - Audit log: export_job_created
-  //
-  // Latency budget: p50 < ~200ms (just enqueue, not process)
-  res.status(202).json({
-    message: 'Enqueue export job endpoint - not yet implemented',
-    jobId: null,
-    status: 'queued',
-  });
+reportsRouter.post('/export', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { format, startDate, endDate, includeCategories } = req.body;
+
+    if (!format || !startDate || !endDate) {
+      return res.status(400).json({ error: 'format, startDate, and endDate are required' });
+    }
+
+    const job = await enqueueExportJob(userId, format, startDate, endDate, includeCategories);
+    res.status(202).json(job);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
 });
 
 /**
  * GET /api/v1/reports/export/:jobId
  * Poll the status of an export job and download result if ready
  */
-reportsRouter.get('/export/:jobId', async (req: Request, res: Response) => {
-  // TODO: Implement job status polling
-  // - Verify JWT token
-  // - Extract user_id and jobId from path
-  // - Lookup job in Redis/queue backend
-  // - Return current job status:
-  //   - queued: waiting to start
-  //   - processing: currently generating
-  //   - completed: ready for download
-  //   - failed: error during generation
-  // - If completed:
-  //   - Return downloadUrl or inline file content (if small enough)
-  //   - Set Content-Disposition to suggest filename
-  // - If failed:
-  //   - Return error message
-  // - Audit log: export_job_retrieved
-  const jobId = req.params.jobId;
-  res.status(200).json({
-    message: 'Get export job status endpoint - not yet implemented',
-    jobId,
-    status: 'unknown',
-  });
+reportsRouter.get('/export/:jobId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { jobId } = req.params;
+    const status = await getExportJobStatus(jobId);
+    res.status(200).json(status);
+  } catch (error) {
+    res.status(404).json({ error: (error as Error).message });
+  }
 });
-
-/**
- * Queue Worker implementation (separate from Express routes)
- *
- * This worker process listens to the BullMQ queue and processes export jobs:
- * 1. Pull a job from the queue
- * 2. Query database for transactions in the specified date range
- * 3. Generate PDF/CSV/Excel file
- * 4. Upload to S3 or save locally (based on deployment tier)
- * 5. Mark job as completed with a download URL
- * 6. Log any errors
- *
- * The worker should:
- * - Use the same database connection pooling as the main app
- * - Handle errors gracefully (retry logic, dead-letter queue)
- * - Not block the main Express server
- * - Be horizontally scalable (multiple worker instances can process jobs in parallel)
- */

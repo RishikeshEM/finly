@@ -1,19 +1,28 @@
 /**
  * Authentication routes
  *
- * Endpoints:
- * - POST /api/v1/auth/register
- * - POST /api/v1/auth/login
- * - GET/POST /api/v1/auth/oauth/{google,apple}/callback
- * - POST /api/v1/auth/otp/{request,verify}
- * - POST /api/v1/auth/password-reset/{request,confirm}
- * - POST /api/v1/auth/refresh
+ * MVP Implementation (Phase 1):
+ * - POST /api/v1/auth/register (email/password)
+ * - POST /api/v1/auth/login (email/password)
+ * - POST /api/v1/auth/refresh (JWT refresh token)
+ *
+ * Phase 2 (Future):
+ * - OAuth (Google/Apple)
+ * - OTP/MFA
+ * - Password reset
  *
  * Latency targets (backend-spec §4.1):
  * - p50 < 120ms, p95 < 300ms, p99 < 800ms
  */
 
 import { Router, Request, Response } from 'express';
+import {
+  registerUser,
+  loginUser,
+  issueTokens,
+  refreshAccessToken,
+  verifyAccessToken,
+} from '../services/auth.service';
 
 export const authRouter = Router();
 
@@ -22,17 +31,29 @@ export const authRouter = Router();
  * Register a new user via email/password
  */
 authRouter.post('/register', async (req: Request, res: Response) => {
-  // TODO: Implement email/password registration
-  // - Validate input (email format, password strength)
-  // - Hash password with bcrypt
-  // - Create user record in database
-  // - Issue JWT access token + refresh token (httpOnly cookie)
-  // - Audit log: user_created
-  res.status(201).json({
-    message: 'Register endpoint - not yet implemented',
-    userId: null,
-    accessToken: null,
-  });
+  try {
+    const { email, password } = req.body;
+
+    const user = await registerUser(email, password);
+
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', user.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    res.status(201).json({
+      userId: user.id,
+      email: user.email,
+      accessToken: user.accessToken,
+    });
+  } catch (error) {
+    const message = (error as Error).message;
+    const status = message === 'Email already registered' ? 409 : 400;
+    res.status(status).json({ error: message });
+  }
 });
 
 /**
@@ -40,103 +61,28 @@ authRouter.post('/register', async (req: Request, res: Response) => {
  * Login with email/password
  */
 authRouter.post('/login', async (req: Request, res: Response) => {
-  // TODO: Implement email/password login
-  // - Validate input
-  // - Lookup user by email
-  // - Compare password hash
-  // - Check if MFA/OTP is required
-  // - Issue JWT tokens
-  // - Audit log: login_success or login_failed
-  // - Rate limiting (BE-EC-09)
-  res.status(200).json({
-    message: 'Login endpoint - not yet implemented',
-    accessToken: null,
-    requiresMfa: false,
-  });
-});
+  try {
+    const { email, password } = req.body;
 
-/**
- * GET /api/v1/auth/oauth/:provider/callback
- * OAuth callback (Google, Apple)
- */
-authRouter.get('/oauth/:provider/callback', async (req: Request, res: Response) => {
-  // TODO: Implement OAuth callback handler
-  // - Parse provider-specific authorization code
-  // - Exchange code for access token with OAuth provider
-  // - Lookup or create user based on OAuth profile
-  // - Issue Finly JWT tokens
-  // - Audit log: oauth_login
-  const provider = req.params.provider;
-  res.status(200).json({
-    message: `OAuth callback for ${provider} - not yet implemented`,
-  });
-});
+    const user = await loginUser(email, password);
 
-/**
- * POST /api/v1/auth/otp/request
- * Request an OTP code (SMS/email) for passwordless login or MFA
- */
-authRouter.post('/otp/request', async (req: Request, res: Response) => {
-  // TODO: Implement OTP request
-  // - Validate email/phone input
-  // - Generate 6-digit OTP code
-  // - Store in Redis with expiry (e.g. 10 minutes)
-  // - Send via SMS (Twilio) or email (SendGrid)
-  // - Rate limiting (BE-EC-05)
-  res.status(200).json({
-    message: 'OTP request endpoint - not yet implemented',
-    messageId: null,
-  });
-});
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', user.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
-/**
- * POST /api/v1/auth/otp/verify
- * Verify an OTP code and complete login/MFA
- */
-authRouter.post('/otp/verify', async (req: Request, res: Response) => {
-  // TODO: Implement OTP verification
-  // - Validate input (email/phone, code)
-  // - Lookup OTP from Redis
-  // - Check expiry and attempt count (BE-EC-05)
-  // - If valid, create/update user and issue JWT
-  // - If invalid, increment attempt counter and return error
-  res.status(200).json({
-    message: 'OTP verify endpoint - not yet implemented',
-    accessToken: null,
-  });
-});
-
-/**
- * POST /api/v1/auth/password-reset/request
- * Request a password reset token
- */
-authRouter.post('/password-reset/request', async (req: Request, res: Response) => {
-  // TODO: Implement password reset request
-  // - Validate email exists
-  // - Generate reset token (secure random, time-limited)
-  // - Store token in Redis/DB with expiry (e.g. 24 hours)
-  // - Send reset link via email (SendGrid)
-  // - Avoid user enumeration leak (BE-EC-04): return generic success
-  // - Rate limiting
-  res.status(200).json({
-    message: 'Password reset request endpoint - not yet implemented',
-  });
-});
-
-/**
- * POST /api/v1/auth/password-reset/confirm
- * Confirm password reset with token and new password
- */
-authRouter.post('/password-reset/confirm', async (req: Request, res: Response) => {
-  // TODO: Implement password reset confirmation
-  // - Validate token exists and is not expired (BE-EC-04)
-  // - Hash new password
-  // - Update user password in database
-  // - Invalidate all existing tokens/sessions
-  // - Audit log: password_changed
-  res.status(200).json({
-    message: 'Password reset confirm endpoint - not yet implemented',
-  });
+    res.status(200).json({
+      userId: user.id,
+      email: user.email,
+      accessToken: user.accessToken,
+    });
+  } catch (error) {
+    const message = (error as Error).message;
+    res.status(401).json({ error: message });
+  }
 });
 
 /**
@@ -144,13 +90,80 @@ authRouter.post('/password-reset/confirm', async (req: Request, res: Response) =
  * Refresh access token using refresh token (from httpOnly cookie)
  */
 authRouter.post('/refresh', async (req: Request, res: Response) => {
-  // TODO: Implement token refresh
-  // - Extract refresh token from httpOnly cookie
-  // - Validate JWT signature and expiry
-  // - Issue new access token (short-lived)
-  // - Optionally rotate refresh token
-  res.status(200).json({
-    message: 'Refresh token endpoint - not yet implemented',
-    accessToken: null,
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    // Issue new access token (refreshAccessToken handles token verification internally)
+    const newAccessToken = refreshAccessToken(refreshToken);
+
+    res.status(200).json({
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    const message = (error as Error).message;
+    res.status(401).json({ error: message });
+  }
+});
+
+// ============================================================================
+// PHASE 2: OAuth, OTP, Password Reset (Not yet implemented)
+// ============================================================================
+
+/**
+ * GET /api/v1/auth/oauth/:provider/callback
+ * OAuth callback (Google, Apple) - Phase 2
+ */
+authRouter.get('/oauth/:provider/callback', async (req: Request, res: Response) => {
+  res.status(501).json({
+    error: 'OAuth not yet implemented',
+    message: 'Coming in Phase 2: Google and Apple OAuth support',
+  });
+});
+
+/**
+ * POST /api/v1/auth/otp/request
+ * Request an OTP code - Phase 2
+ */
+authRouter.post('/otp/request', async (req: Request, res: Response) => {
+  res.status(501).json({
+    error: 'OTP not yet implemented',
+    message: 'Coming in Phase 2: Passwordless login and MFA support',
+  });
+});
+
+/**
+ * POST /api/v1/auth/otp/verify
+ * Verify an OTP code - Phase 2
+ */
+authRouter.post('/otp/verify', async (req: Request, res: Response) => {
+  res.status(501).json({
+    error: 'OTP verification not yet implemented',
+    message: 'Coming in Phase 2',
+  });
+});
+
+/**
+ * POST /api/v1/auth/password-reset/request
+ * Request a password reset token - Phase 2
+ */
+authRouter.post('/password-reset/request', async (req: Request, res: Response) => {
+  res.status(501).json({
+    error: 'Password reset not yet implemented',
+    message: 'Coming in Phase 2: Email-based password reset',
+  });
+});
+
+/**
+ * POST /api/v1/auth/password-reset/confirm
+ * Confirm password reset - Phase 2
+ */
+authRouter.post('/password-reset/confirm', async (req: Request, res: Response) => {
+  res.status(501).json({
+    error: 'Password reset not yet implemented',
+    message: 'Coming in Phase 2',
   });
 });

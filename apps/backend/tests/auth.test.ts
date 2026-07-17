@@ -102,8 +102,8 @@ describe('Auth Service', () => {
 
       const user = await registerUser(email, TEST_PASSWORD);
 
-      // TODO: Verify audit_logs table has entry for user_created
-      // SELECT * FROM audit_logs WHERE user_id = $1 AND action = 'user_created'
+      // TODO: Verify audit_logs table has entry for user creation
+      // SELECT * FROM audit_logs WHERE user_id = $1 AND action = 'create' AND entity_type = 'user'
       expect(user.id).toBeDefined();
     });
 
@@ -113,8 +113,8 @@ describe('Auth Service', () => {
       await registerUser(email, TEST_PASSWORD);
       const user = await loginUser(email, TEST_PASSWORD);
 
-      // TODO: Verify audit_logs table has entry for login_success
-      // SELECT * FROM audit_logs WHERE user_id = $1 AND action = 'login_success'
+      // TODO: Verify audit_logs table has entry for login event
+      // SELECT * FROM audit_logs WHERE user_id = $1 AND action = 'update' AND entity_type = 'user'
       expect(user.id).toBeDefined();
     });
 
@@ -129,8 +129,8 @@ describe('Auth Service', () => {
         // Expected to fail
       }
 
-      // TODO: Verify audit_logs table has entry for login_failed
-      // SELECT * FROM audit_logs WHERE action = 'login_failed' AND details->>'email' = $1
+      // TODO: Verify audit_logs table has entry for failed login attempt
+      // SELECT * FROM audit_logs WHERE action = 'update' AND entity_type = 'user' AND diff->>'event' = 'login_failed'
     });
   });
 });

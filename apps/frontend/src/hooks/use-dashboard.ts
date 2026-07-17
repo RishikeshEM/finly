@@ -11,6 +11,11 @@ export interface DashboardData {
     savings: number;
     netWorth: number;
   };
+  kpiDeltas: {
+    monthlyIncome: number | null;
+    monthlyExpenses: number | null;
+    savings: number | null;
+  };
   cashFlow: {
     labels: string[];
     income: number[];

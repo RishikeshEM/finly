@@ -136,7 +136,8 @@ async function queryDashboardFromDatabase(userId: string) {
   const client = await pool.connect();
 
   try {
-    // KPIs - totals and current-month summaries
+    // KPIs - totals, current-month, and previous-month summaries (previous
+    // month feeds the "vs last month" delta the Dashboard UI shows per KPI)
     const kpiResult = await client.query(
       `
       SELECT
@@ -145,7 +146,11 @@ async function queryDashboardFromDatabase(userId: string) {
         COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW())
           AND t.type = 'income' THEN t.amount_cents ELSE 0 END), 0) as monthly_income,
         COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW())
-          AND t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as monthly_expenses
+          AND t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as monthly_expenses,
+        COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW() - INTERVAL '1 month')
+          AND t.type = 'income' THEN t.amount_cents ELSE 0 END), 0) as prev_monthly_income,
+        COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW() - INTERVAL '1 month')
+          AND t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as prev_monthly_expenses
       FROM transactions t
       JOIN accounts a ON t.account_id = a.id
       WHERE a.user_id = $1
@@ -156,6 +161,16 @@ async function queryDashboardFromDatabase(userId: string) {
     const kpiRow = kpiResult.rows[0];
     const monthlyIncome = parseInt(kpiRow.monthly_income);
     const monthlyExpenses = parseInt(kpiRow.monthly_expenses);
+    const prevMonthlyIncome = parseInt(kpiRow.prev_monthly_income);
+    const prevMonthlyExpenses = parseInt(kpiRow.prev_monthly_expenses);
+
+    // Percent change vs last month; null (not 0) when there's no prior-month
+    // baseline to compare against, so the UI can omit the delta rather than
+    // showing a misleading "+100%" or "0%".
+    const pctChange = (current: number, previous: number): number | null => {
+      if (previous === 0) return current === 0 ? null : null;
+      return Math.round(((current - previous) / Math.abs(previous)) * 100);
+    };
 
     // Recent transactions
     const txResult = await client.query(
@@ -237,13 +252,25 @@ async function queryDashboardFromDatabase(userId: string) {
       [userId]
     );
 
+    const savings = monthlyIncome - monthlyExpenses;
+    const prevSavings = prevMonthlyIncome - prevMonthlyExpenses;
+    const totalBalance = parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses);
+
     return {
       kpis: {
-        totalBalance: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
+        totalBalance,
         monthlyIncome,
         monthlyExpenses,
-        savings: monthlyIncome - monthlyExpenses,
-        netWorth: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
+        savings,
+        netWorth: totalBalance,
+      },
+      kpiDeltas: {
+        // totalBalance/netWorth have no natural "vs last month" baseline
+        // without a snapshot history table, so only the three genuinely
+        // monthly figures get a delta.
+        monthlyIncome: pctChange(monthlyIncome, prevMonthlyIncome),
+        monthlyExpenses: pctChange(monthlyExpenses, prevMonthlyExpenses),
+        savings: pctChange(savings, prevSavings),
       },
       cashFlow: {
         labels: cashFlowResult.rows.map((row) => row.date),

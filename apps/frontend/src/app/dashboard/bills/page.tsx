@@ -2,7 +2,14 @@
 'use client';
 
 import { ComingSoonPage } from '@/components/placeholders/coming-soon-page';
+import { ReceiptIcon } from '@/components/icons';
 
 export default function Page() {
-  return <ComingSoonPage title="Upcoming Bills" />;
+  return (
+    <ComingSoonPage
+      icon={ReceiptIcon}
+      title="Bills Reminder"
+      description="Never miss a due date again."
+    />
+  );
 }

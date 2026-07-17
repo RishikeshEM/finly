@@ -2,7 +2,14 @@
 'use client';
 
 import { ComingSoonPage } from '@/components/placeholders/coming-soon-page';
+import { RepeatIcon } from '@/components/icons';
 
 export default function Page() {
-  return <ComingSoonPage title="Subscriptions" />;
+  return (
+    <ComingSoonPage
+      icon={RepeatIcon}
+      title="Subscription Manager"
+      description="See every recurring charge before it renews."
+    />
+  );
 }

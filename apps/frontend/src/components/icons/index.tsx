@@ -9,7 +9,7 @@
  * kind is implemented anywhere in this file.
  */
 
-interface IconProps {
+export interface IconProps {
   size?: number;
   color?: string;
   strokeWidth?: number;

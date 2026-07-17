@@ -16,7 +16,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useExportMyData, useDeleteAccount } from '@/hooks/use-profile';
-import { formatDate } from '@/lib/format';
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -64,7 +63,7 @@ export function ProfilePage() {
 
       {/* Account Information */}
       <Card>
-        <h3 className="text-lg font-semibold mb-6 text-text-light dark:text-text-dark">Account Information</h3>
+        <h3 className="text-base font-bold mb-5 text-text-light dark:text-text-dark">Account Information</h3>
 
         <div className="space-y-4 text-sm">
           <div className="flex justify-between py-2 border-b border-border-light dark:border-border-dark">
@@ -88,8 +87,8 @@ export function ProfilePage() {
 
       {/* GDPR Data Controls */}
       <Card>
-        <h3 className="text-lg font-semibold mb-2 text-text-light dark:text-text-dark">Your Data</h3>
-        <p className="text-sm text-text-muted-light dark:text-text-muted-dark mb-6">
+        <h3 className="text-base font-bold mb-2 text-text-light dark:text-text-dark">Your Data</h3>
+        <p className="text-[13px] text-text-muted-light dark:text-text-muted-dark mb-5">
           Download a complete copy of your data, or permanently delete your account.
         </p>
 

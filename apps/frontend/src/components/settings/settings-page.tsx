@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateProfile } from '@/hooks/use-profile';
+import { ChevronDownIcon } from '@/components/icons';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR'];
 const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Asia/Kolkata'];
@@ -65,72 +66,83 @@ export function SettingsPage() {
 
       {/* Preferences */}
       <Card>
-        <h3 className="text-lg font-semibold mb-6 text-text-light dark:text-text-dark">Preferences</h3>
+        <h3 className="text-base font-bold mb-5 text-text-light dark:text-text-dark">Preferences</h3>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold mb-2 text-text-muted-light dark:text-text-muted-dark">
+            <label className="block text-[13px] font-semibold mb-2 text-text-muted-light dark:text-text-muted-dark">
               Preferred Currency
             </label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-input-bg-light dark:bg-input-bg-dark text-text-light dark:text-text-dark"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <div className="relative max-w-xs">
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark text-[13px] font-semibold cursor-pointer"
+                style={{ height: '40px', padding: '0 32px 0 14px' }}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted-light dark:text-text-muted-dark"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-2 text-text-muted-light dark:text-text-muted-dark">Timezone</label>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border-light dark:border-border-dark bg-input-bg-light dark:bg-input-bg-dark text-text-light dark:text-text-dark"
-            >
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+            <label className="block text-[13px] font-semibold mb-2 text-text-muted-light dark:text-text-muted-dark">Timezone</label>
+            <div className="relative max-w-xs">
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark text-[13px] font-semibold cursor-pointer"
+                style={{ height: '40px', padding: '0 32px 0 14px' }}
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted-light dark:text-text-muted-dark"
+              />
+            </div>
           </div>
         </div>
       </Card>
 
       {/* Notifications */}
       <Card>
-        <h3 className="text-lg font-semibold mb-6 text-text-light dark:text-text-dark">Notifications</h3>
+        <h3 className="text-base font-bold mb-5 text-text-light dark:text-text-dark">Notifications</h3>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-text-light dark:text-text-dark">Email Notifications</p>
-              <p className="text-sm text-text-muted-light dark:text-text-muted-dark">Budget alerts, bill reminders, and summaries</p>
-            </div>
-            <input type="checkbox" checked={emailNotifs} onChange={(e) => setEmailNotifs(e.target.checked)} className="w-5 h-5" />
-          </div>
-
+          <ToggleRow
+            label="Email Notifications"
+            description="Budget alerts, bill reminders, and summaries"
+            checked={emailNotifs}
+            onChange={setEmailNotifs}
+          />
           <div className="border-t border-border-light dark:border-border-dark pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-text-light dark:text-text-dark">Push Notifications</p>
-                <p className="text-sm text-text-muted-light dark:text-text-muted-dark">Real-time alerts and reminders</p>
-              </div>
-              <input type="checkbox" checked={pushNotifs} onChange={(e) => setPushNotifs(e.target.checked)} className="w-5 h-5" />
-            </div>
+            <ToggleRow
+              label="Push Notifications"
+              description="Real-time alerts and reminders"
+              checked={pushNotifs}
+              onChange={setPushNotifs}
+            />
           </div>
         </div>
       </Card>
 
       {/* Security */}
       <Card>
-        <h3 className="text-lg font-semibold mb-2 text-text-light dark:text-text-dark">Security</h3>
-        <p className="text-sm text-text-muted-light dark:text-text-muted-dark mb-4">
+        <h3 className="text-base font-bold mb-2 text-text-light dark:text-text-dark">Security</h3>
+        <p className="text-[13px] text-text-muted-light dark:text-text-muted-dark">
           Password changes, two-factor authentication, and login activity are coming soon.
         </p>
       </Card>
@@ -141,6 +153,40 @@ export function SettingsPage() {
           {updateProfile.isPending ? 'Saving…' : 'Save Changes'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-semibold text-text-light dark:text-text-dark">{label}</p>
+        <p className="text-[13px] text-text-muted-light dark:text-text-muted-dark mt-0.5">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative rounded-full transition-colors flex-shrink-0 ${checked ? 'bg-secondary' : 'bg-card-alt-light dark:bg-card-alt-dark'}`}
+        style={{ width: 40, height: 22 }}
+      >
+        <span
+          className="absolute bg-white rounded-full transition-transform shadow-sm"
+          style={{ width: 18, height: 18, top: 2, left: 2, transform: checked ? 'translateX(18px)' : 'translateX(0)' }}
+        />
+      </button>
     </div>
   );
 }

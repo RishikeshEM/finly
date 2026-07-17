@@ -1,5 +1,6 @@
 import { pool } from '../db';
 import { invalidateDashboardCache } from './cache.service';
+import { checkGoalProgressTrigger } from './notifications.service';
 
 export async function createGoal(userId: string, name: string, targetCents: number, deadline: string, monthlyContributionCents?: number) {
   const result = await pool.query(
@@ -48,6 +49,12 @@ export async function updateGoal(userId: string, goalId: string, updates: any) {
       [userId, 'update', 'goal', goalId, JSON.stringify(updates)]);
 
     await invalidateDashboardCache(userId);
+
+    if (updates.current_cents !== undefined) {
+      checkGoalProgressTrigger(userId, goalId).catch((err) =>
+        console.warn('Goal progress trigger check failed:', err.message)
+      );
+    }
 
     return result.rows[0];
   } finally { client.release(); }

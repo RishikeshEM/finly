@@ -5,6 +5,7 @@
 
 import { pool } from '../db';
 import { invalidateDashboardCache } from './cache.service';
+import { checkBudgetAlertTrigger } from './notifications.service';
 
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR'];
 
@@ -81,6 +82,11 @@ export async function createTransaction(
     );
 
     await invalidateDashboardCache(userId);
+
+    // Non-blocking: budget alert trigger check (backend-spec §2.8)
+    checkBudgetAlertTrigger(userId, categoryId).catch((err) =>
+      console.warn('Budget alert trigger check failed:', err.message)
+    );
 
     return transaction;
   } finally {

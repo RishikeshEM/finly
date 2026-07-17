@@ -1,29 +1,39 @@
 // FORBIDDEN_SCOPE_OVERRIDE: Building login UI per spec; not implementing Bank Sync, Investment Tracking, or other excluded features
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/lib/auth-context';
+import { loginSchema, LoginFormValues } from '@/lib/auth-schemas';
+import { OAuthButtons } from '@/components/auth/oauth-buttons';
 
 export function LoginForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { login } = useAuth();
+  const router = useRouter();
+  const [serverError, setServerError] = useState('');
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
+  const onSubmit = async (values: LoginFormValues) => {
+    setServerError('');
     try {
-      // API call would go here
-      console.log('Login attempt:', { email, password, rememberMe });
+      await login(values.email, values.password);
+      router.push('/dashboard');
     } catch (err) {
-      setError('Invalid email or password');
-    } finally {
-      setIsLoading(false);
+      const axiosErr = err as AxiosError<{ error?: string }>;
+      // Generic message regardless of whether it's a bad email or bad password -
+      // avoids user enumeration (backend-spec BE-EC-04's intent applies here too).
+      setServerError(axiosErr.response?.data?.error || 'Invalid email or password');
     }
   };
 
@@ -73,10 +83,10 @@ export function LoginForm() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+            {serverError && (
               <div className="p-4 bg-danger/10 border border-danger rounded-lg text-danger text-sm">
-                {error}
+                {serverError}
               </div>
             )}
 
@@ -84,40 +94,26 @@ export function LoginForm() {
               <label className="block text-sm font-semibold text-text-muted-light dark:text-text-muted-dark mb-2">
                 Email address
               </label>
-              <Input
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input type="email" placeholder="you@company.com" {...register('email')} />
+              {errors.email && <p className="mt-1 text-sm text-danger">{errors.email.message}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-text-muted-light dark:text-text-muted-dark mb-2">
                 Password
               </label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <Input type="password" placeholder="••••••••" {...register('password')} />
+              {errors.password && <p className="mt-1 text-sm text-danger">{errors.password.message}</p>}
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-text-muted-light dark:text-text-muted-dark">
-                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                Remember me
-              </label>
-              <a href="#" className="text-sm text-secondary hover:underline">
+            <div className="flex items-center justify-end">
+              <Link href="/forgot-password" className="text-sm text-secondary hover:underline">
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
-            <Button type="submit" disabled={isLoading} className="w-full mt-6">
-              {isLoading ? 'Signing in...' : 'Sign in'}
+            <Button type="submit" disabled={isSubmitting} className="w-full mt-6">
+              {isSubmitting ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
 
@@ -127,16 +123,13 @@ export function LoginForm() {
             <div className="flex-1 h-px bg-border-light dark:bg-border-dark" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mt-6">
-            <Button variant="outline">Google</Button>
-            <Button variant="outline">Apple</Button>
-          </div>
+          <OAuthButtons />
 
           <p className="text-center text-sm text-text-muted-light dark:text-text-muted-dark mt-8">
             Don't have an account?{' '}
-            <a href="#" className="text-secondary font-semibold hover:underline">
+            <Link href="/register" className="text-secondary font-semibold hover:underline">
               Sign up
-            </a>
+            </Link>
           </p>
         </div>
       </div>

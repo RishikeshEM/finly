@@ -1,15 +1,18 @@
 // FORBIDDEN_SCOPE_OVERRIDE: Building Savings Goals page per spec; not building AI Financial Assistant
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useGoals, useDeleteGoal, Goal } from '@/hooks/use-goals';
 import { useAuth } from '@/lib/auth-context';
 import { formatCents, formatDate } from '@/lib/format';
 import { GoalFormModal } from '@/components/goals/goal-form-modal';
 import { AddFundsModal } from '@/components/goals/add-funds-modal';
+import { PlusIcon, ProgressRing } from '@/components/icons';
+import tokens from '../../../../../inputs/design/tokens.json';
+
+const light = tokens.color.light;
 
 export function GoalsPage() {
   const { user } = useAuth();
@@ -20,6 +23,16 @@ export function GoalsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [fundingGoal, setFundingGoal] = useState<Goal | undefined>();
 
+  const summary = useMemo(() => {
+    if (!goals) return { saved: 0, target: 0, count: 0, completed: 0 };
+    return {
+      saved: goals.reduce((s, g) => s + g.current_cents, 0),
+      target: goals.reduce((s, g) => s + g.target_cents, 0),
+      count: goals.length,
+      completed: goals.filter((g) => g.progress_percentage >= 100).length,
+    };
+  }, [goals]);
+
   const handleDelete = async (id: string) => {
     if (confirm('Delete this savings goal?')) {
       await deleteGoal.mutateAsync(id);
@@ -28,30 +41,46 @@ export function GoalsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Card className="h-20 animate-pulse" />
+      <div className="space-y-5">
+        <div className="grid grid-cols-4 gap-5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="h-24 animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
 
+  const hasGoals = goals && goals.length > 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Savings Goals</h2>
-          <p className="text-text-muted-light dark:text-text-muted-dark">Track your money targets</p>
-        </div>
-        <Button variant="primary" onClick={() => setShowCreate(true)}>
+    <div className="space-y-5">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 rounded-lg bg-secondary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+          style={{ height: '40px', padding: '0 16px' }}
+        >
+          <PlusIcon size={16} />
           New Goal
-        </Button>
+        </button>
       </div>
 
-      {!goals || goals.length === 0 ? (
+      {hasGoals && (
+        <div className="grid grid-cols-4 gap-5">
+          <SummaryCard label="Total Saved" value={formatCents(summary.saved, currency)} />
+          <SummaryCard label="Combined Target" value={formatCents(summary.target, currency)} />
+          <SummaryCard label="Active Goals" value={summary.count.toString()} />
+          <SummaryCard label="Completed" value={summary.completed.toString()} color={light.primary} />
+        </div>
+      )}
+
+      {!hasGoals ? (
         <Card>
           <EmptyState icon="🏦" title="No savings goals yet" description="Create a goal to start tracking your progress." />
         </Card>
       ) : (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3 gap-5">
           {goals.map((goal) => (
             <GoalCard
               key={goal.id}
@@ -70,6 +99,17 @@ export function GoalsPage() {
   );
 }
 
+function SummaryCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <Card>
+      <div className="text-[13px] font-semibold text-text-muted-light dark:text-text-muted-dark mb-2">{label}</div>
+      <div className="text-xl font-bold" style={{ color: color || undefined }}>
+        <span className={color ? '' : 'text-text-light dark:text-text-dark'}>{value}</span>
+      </div>
+    </Card>
+  );
+}
+
 function GoalCard({
   goal,
   currency,
@@ -81,75 +121,47 @@ function GoalCard({
   onAddFunds: () => void;
   onDelete: () => void;
 }) {
-  // FE-EC-04: progress can exceed 100% (goal exceeded) - ring visually caps
-  // at 100% but the percentage label shows the true, unclipped value.
   const percentage = goal.progress_percentage;
-  const ringProgress = Math.min(percentage, 100);
-  const remaining = Math.max(goal.target_cents - goal.current_cents, 0);
   const isExceeded = percentage > 100;
+  const monthLabel = goal.deadline
+    ? new Date(goal.deadline).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    : '';
 
   return (
-    <Card className="space-y-4">
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="font-semibold text-lg text-text-light dark:text-text-dark mb-1">{goal.name}</h3>
-          <p className="text-sm text-text-muted-light dark:text-text-muted-dark">Deadline: {formatDate(goal.deadline)}</p>
+    <Card className="transition-transform hover:-translate-y-0.5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <ProgressRing
+            percent={percentage}
+            color={isExceeded ? light.warning : light.primary}
+            bgColor={light.cardAlt}
+            size={56}
+            strokeWidth={6}
+          />
+          <div className="min-w-0">
+            <div className="text-base font-bold text-text-light dark:text-text-dark truncate">{goal.name}</div>
+            <div className="text-[13px] text-text-muted-light dark:text-text-muted-dark mt-0.5">
+              {formatCents(goal.current_cents, currency)} of {formatCents(goal.target_cents, currency)}
+            </div>
+          </div>
         </div>
-        <button onClick={onDelete} className="text-text-faint-light dark:text-text-faint-dark hover:text-danger text-sm">
+        <button onClick={onDelete} className="text-text-faint-light dark:text-text-faint-dark hover:text-danger text-sm flex-shrink-0">
           ✕
         </button>
       </div>
 
-      {/* Progress Ring */}
-      <div className="relative w-32 h-32 mx-auto">
-        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" className="text-border-light dark:text-border-dark" />
-          <circle
-            cx="50"
-            cy="50"
-            r="45"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeDasharray={`${(ringProgress / 100) * 283} 283`}
-            className={isExceeded ? 'text-warning transition-all' : 'text-primary transition-all'}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-text-light dark:text-text-dark">{Math.round(percentage)}%</span>
-          <span className="text-xs text-text-muted-light dark:text-text-muted-dark">{isExceeded ? 'exceeded!' : 'of goal'}</span>
-        </div>
+      <div className="flex justify-between text-[13px] text-text-muted-light dark:text-text-muted-dark mb-4">
+        <div>Deadline: {monthLabel || formatDate(goal.deadline)}</div>
+        {goal.monthly_contribution_cents > 0 && <div>+{formatCents(goal.monthly_contribution_cents, currency)}/mo</div>}
       </div>
 
-      {/* Details */}
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-text-muted-light dark:text-text-muted-dark">Saved</span>
-          <span className="font-semibold text-text-light dark:text-text-dark">{formatCents(goal.current_cents, currency)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-text-muted-light dark:text-text-muted-dark">Target</span>
-          <span className="font-semibold text-text-light dark:text-text-dark">{formatCents(goal.target_cents, currency)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-text-muted-light dark:text-text-muted-dark">Remaining</span>
-          <span className="font-semibold text-danger">{formatCents(remaining, currency)}</span>
-        </div>
-        {goal.monthly_contribution_cents > 0 && (
-          <div className="pt-2 border-t border-border-light dark:border-border-dark">
-            <div className="flex justify-between">
-              <span className="text-text-muted-light dark:text-text-muted-dark">Monthly contribution</span>
-              <span className="font-semibold text-text-light dark:text-text-dark">
-                {formatCents(goal.monthly_contribution_cents, currency)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <Button variant="primary" className="w-full" onClick={onAddFunds}>
-        Add Funds
-      </Button>
+      <button
+        onClick={onAddFunds}
+        className="w-full rounded-lg border border-secondary text-secondary text-[13px] font-bold hover:bg-secondary-soft transition-colors"
+        style={{ height: '38px' }}
+      >
+        Add funds
+      </button>
     </Card>
   );
 }

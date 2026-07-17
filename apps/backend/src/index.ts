@@ -16,6 +16,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import config from './config/env';
 
 // Router imports (to be created)
@@ -47,9 +48,14 @@ app.use(cors({
 // Logging
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 
+// Stripe webhook needs the raw request body for signature verification;
+// it must be registered before the global express.json() body parser.
+app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(cookieParser());
 
 // Request ID middleware (for tracing)
 app.use((req: Request, res: Response, next: NextFunction) => {

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -14,9 +15,9 @@ export function ComingSoonPage({ title }: ComingSoonPageProps) {
         <p className="text-lg text-text-muted-light dark:text-text-muted-dark mb-8 max-w-md">
           {title} is on our roadmap and will be available soon. Check back later for updates!
         </p>
-        <Button variant="primary" href="/dashboard">
-          Back to Dashboard
-        </Button>
+        <Link href="/dashboard">
+          <Button variant="primary">Back to Dashboard</Button>
+        </Link>
       </Card>
     </div>
   );

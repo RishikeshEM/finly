@@ -28,11 +28,19 @@ export async function getGoals(userId: string) {
   }));
 }
 
-export async function updateGoal(userId: string, goalId: string, updates: any) {
+export async function updateGoal(userId: string, goalId: string, updates: any, expectedVersion: number) {
+  if (expectedVersion === undefined || expectedVersion === null) {
+    throw new Error('version is required to detect concurrent updates');
+  }
+
   const client = await pool.connect();
   try {
     const current = await client.query(`SELECT * FROM goals WHERE id = $1 AND user_id = $2`, [goalId, userId]);
     if (current.rows.length === 0) throw new Error('Goal not found');
+
+    if (current.rows[0].version !== expectedVersion) {
+      throw new Error('Goal was modified by another request. Please refresh and retry.');
+    }
 
     const fields: string[] = [];
     const values: any[] = [];
@@ -41,6 +49,10 @@ export async function updateGoal(userId: string, goalId: string, updates: any) {
     if (updates.current_cents !== undefined) { fields.push(`current_cents = $${i++}`); values.push(updates.current_cents); }
     if (updates.monthly_contribution_cents !== undefined) { fields.push(`monthly_contribution_cents = $${i++}`); values.push(updates.monthly_contribution_cents); }
     if (updates.name !== undefined) { fields.push(`name = $${i++}`); values.push(updates.name); }
+
+    if (fields.length === 0) {
+      throw new Error('No fields to update');
+    }
 
     values.push(goalId); values.push(userId);
     const result = await client.query(`UPDATE goals SET ${fields.join(', ')}, version = version + 1, updated_at = NOW() WHERE id = $${i} AND user_id = $${i+1} RETURNING *`, values);
@@ -61,7 +73,12 @@ export async function updateGoal(userId: string, goalId: string, updates: any) {
 }
 
 export async function deleteGoal(userId: string, goalId: string) {
-  await pool.query(`DELETE FROM goals WHERE id = $1 AND user_id = $2`, [goalId, userId]);
+  const result = await pool.query(`DELETE FROM goals WHERE id = $1 AND user_id = $2`, [goalId, userId]);
+
+  if (result.rowCount === 0) {
+    throw new Error('Goal not found');
+  }
+
   await pool.query(`INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff) VALUES ($1, $2, $3, $4, $5)`,
     [userId, 'delete', 'goal', goalId, JSON.stringify({})]);
   await invalidateDashboardCache(userId);

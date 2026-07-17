@@ -33,6 +33,11 @@ budgetsRouter.post('/', async (req: AuthRequest, res: Response) => {
 budgetsRouter.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { limitCents, version } = req.body;
+
+    if (version === undefined || version === null) {
+      return res.status(400).json({ error: 'version is required to detect concurrent updates' });
+    }
+
     const budget = await updateBudget(req.user!.userId, req.params.id, limitCents, version);
     res.json(budget);
   } catch (error) {
@@ -46,6 +51,7 @@ budgetsRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
     await deleteBudget(req.user!.userId, req.params.id);
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    const msg = (error as Error).message;
+    res.status(msg.includes('not found') ? 404 : 500).json({ error: msg });
   }
 });

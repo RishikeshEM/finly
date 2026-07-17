@@ -27,3 +27,20 @@ export async function invalidateDashboardCache(userId: string): Promise<void> {
     console.warn(`Failed to invalidate dashboard cache for ${userId}:`, (error as Error).message);
   }
 }
+
+export async function getIdempotentResourceId(scope: string, key: string): Promise<string | null> {
+  try {
+    return await redisClient.get(`idempotency:${scope}:${key}`);
+  } catch (error) {
+    console.warn(`Idempotency lookup failed for ${scope}:${key}:`, (error as Error).message);
+    return null;
+  }
+}
+
+export async function setIdempotentResourceId(scope: string, key: string, resourceId: string, ttlSeconds = 86400): Promise<void> {
+  try {
+    await redisClient.setEx(`idempotency:${scope}:${key}`, ttlSeconds, resourceId);
+  } catch (error) {
+    console.warn(`Idempotency store failed for ${scope}:${key}:`, (error as Error).message);
+  }
+}

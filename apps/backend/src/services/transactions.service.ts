@@ -4,10 +4,8 @@
  */
 
 import { pool } from '../db';
-import { invalidateDashboardCache } from './cache.service';
+import { invalidateDashboardCache, getIdempotentResourceId, setIdempotentResourceId } from './cache.service';
 import { checkBudgetAlertTrigger } from './notifications.service';
-
-const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR'];
 
 export interface Transaction {
   id: string;
@@ -45,34 +43,40 @@ export async function createTransaction(
   recurring?: boolean,
   recurrenceRule?: string
 ): Promise<Transaction> {
+  const idempotencyScope = `transaction:${accountId}`;
+
+  // Check for duplicate submission via idempotency key (BE-EC-01)
+  const existingId = await getIdempotentResourceId(idempotencyScope, idempotencyKey);
+  if (existingId) {
+    const existingResult = await pool.query(
+      'SELECT id, account_id, category_id, type, amount_cents, date, notes, payment_method, recurring, recurrence_rule FROM transactions WHERE id = $1',
+      [existingId]
+    );
+    if (existingResult.rows.length > 0) {
+      return existingResult.rows[0];
+    }
+    // Idempotency record pointed at a since-deleted transaction; fall through and create fresh.
+  }
+
+  // Validate amount is positive integer
+  if (amountCents <= 0 || !Number.isInteger(amountCents)) {
+    throw new Error('Amount must be a positive integer (cents)');
+  }
+
   const client = await pool.connect();
 
   try {
-    // Check for duplicate submission via idempotency key (BE-EC-01)
-    const existingResult = await client.query(
-      'SELECT id, amount_cents FROM transactions WHERE account_id = $1 AND idempotency_key = $2',
-      [accountId, idempotencyKey]
-    );
-
-    if (existingResult.rows.length > 0) {
-      // Return cached response for duplicate
-      return existingResult.rows[0];
-    }
-
-    // Validate amount is positive integer
-    if (amountCents <= 0 || !Number.isInteger(amountCents)) {
-      throw new Error('Amount must be a positive integer (cents)');
-    }
-
     // Create transaction
     const result = await client.query(
-      `INSERT INTO transactions (account_id, category_id, type, amount_cents, date, notes, payment_method, recurring, recurrence_rule, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO transactions (account_id, category_id, type, amount_cents, date, notes, payment_method, recurring, recurrence_rule)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, account_id, category_id, type, amount_cents, date, notes, payment_method, recurring, recurrence_rule`,
-      [accountId, categoryId, type, amountCents, date, notes, paymentMethod, recurring || false, recurrenceRule, idempotencyKey]
+      [accountId, categoryId, type, amountCents, date, notes, paymentMethod, recurring || false, recurrenceRule]
     );
 
     const transaction = result.rows[0];
+
+    await setIdempotentResourceId(idempotencyScope, idempotencyKey, transaction.id);
 
     // Audit log
     await client.query(
@@ -228,7 +232,14 @@ export async function createCategory(userId: string, name: string, icon?: string
     [userId, name, icon]
   );
 
-  return result.rows[0];
+  const category = result.rows[0];
+
+  await pool.query(
+    `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff) VALUES ($1, $2, $3, $4, $5)`,
+    [userId, 'create', 'category', category.id, JSON.stringify({ name, icon })]
+  );
+
+  return category;
 }
 
 /**
@@ -280,7 +291,14 @@ export async function updateCategory(userId: string, categoryId: string, name?: 
   const updateQuery = `UPDATE categories SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING id, user_id, name, icon`;
 
   const result = await pool.query(updateQuery, values);
-  return result.rows[0];
+  const category = result.rows[0];
+
+  await pool.query(
+    `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff) VALUES ($1, $2, $3, $4, $5)`,
+    [userId, 'update', 'category', categoryId, JSON.stringify({ name, icon })]
+  );
+
+  return category;
 }
 
 /**
@@ -316,6 +334,11 @@ export async function deleteCategory(userId: string, categoryId: string): Promis
     }
 
     await client.query('DELETE FROM categories WHERE id = $1', [categoryId]);
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff) VALUES ($1, $2, $3, $4, $5)`,
+      [userId, 'delete', 'category', categoryId, JSON.stringify({})]
+    );
   } finally {
     client.release();
   }

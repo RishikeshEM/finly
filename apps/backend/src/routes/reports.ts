@@ -65,12 +65,13 @@ reportsRouter.post('/export', async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/v1/reports/export/:jobId
- * Poll the status of an export job and download result if ready
+ * Poll the status of an export job and download result if ready.
+ * Scoped to the requesting user - see getExportJobStatus.
  */
 reportsRouter.get('/export/:jobId', async (req: AuthRequest, res: Response) => {
   try {
     const { jobId } = req.params;
-    const status = await getExportJobStatus(jobId);
+    const status = await getExportJobStatus(jobId, req.user!.userId);
     res.status(200).json(status);
   } catch (error) {
     res.status(404).json({ error: (error as Error).message });

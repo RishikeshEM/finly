@@ -125,118 +125,157 @@ dashboardRouter.get('/', async (req: AuthRequest, res: Response) => {
 /**
  * Query dashboard aggregations from database
  * Used as fallback when Redis is unavailable
+ *
+ * Schema note: transactions has no user_id column directly - it's reached via
+ * account_id -> accounts.user_id. budgets has no name column - category name
+ * comes via category_id -> categories.name. Goals live in the goals table
+ * with no status column - all rows for a user are surfaced (no archival
+ * state exists in the schema).
  */
 async function queryDashboardFromDatabase(userId: string) {
+  const client = await pool.connect();
+
   try {
-    const client = await pool.connect();
+    // KPIs - totals and current-month summaries
+    const kpiResult = await client.query(
+      `
+      SELECT
+        COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount_cents ELSE 0 END), 0) as total_income,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as total_expenses,
+        COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW())
+          AND t.type = 'income' THEN t.amount_cents ELSE 0 END), 0) as monthly_income,
+        COALESCE(SUM(CASE WHEN DATE_TRUNC('month', t.date) = DATE_TRUNC('month', NOW())
+          AND t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) as monthly_expenses
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      WHERE a.user_id = $1
+    `,
+      [userId]
+    );
 
-    try {
-      // Get KPIs - totals and monthly summaries
-      const kpiResult = await client.query(
-        `
-        SELECT
-          COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
-          COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses,
-          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', date) = DATE_TRUNC('month', NOW())
-            AND type = 'income' THEN amount ELSE 0 END), 0) as monthly_income,
-          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', date) = DATE_TRUNC('month', NOW())
-            AND type = 'expense' THEN amount ELSE 0 END), 0) as monthly_expenses
-        FROM transactions
-        WHERE user_id = $1
-      `,
-        [userId]
-      );
+    const kpiRow = kpiResult.rows[0];
+    const monthlyIncome = parseInt(kpiRow.monthly_income);
+    const monthlyExpenses = parseInt(kpiRow.monthly_expenses);
 
-      const kpiRow = kpiResult.rows[0];
-      const monthlyIncome = parseInt(kpiRow.monthly_income);
-      const monthlyExpenses = parseInt(kpiRow.monthly_expenses);
+    // Recent transactions
+    const txResult = await client.query(
+      `
+      SELECT t.id, t.date, c.name as category_name, t.amount_cents, t.notes, t.type
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      JOIN categories c ON t.category_id = c.id
+      WHERE a.user_id = $1
+      ORDER BY t.date DESC
+      LIMIT 20
+    `,
+      [userId]
+    );
 
-      // Get recent transactions
-      const txResult = await client.query(
-        `
-        SELECT id, date, category, amount, notes, type
-        FROM transactions
-        WHERE user_id = $1
-        ORDER BY date DESC
-        LIMIT 20
-      `,
-        [userId]
-      );
+    // Budgets summary - current-period spend, bucketed per period_type (see budgets.service.ts)
+    const budgetsResult = await client.query(
+      `
+      SELECT
+        c.name as category_name,
+        b.limit_cents,
+        COALESCE(SUM(t.amount_cents), 0) as spent_cents
+      FROM budgets b
+      JOIN categories c ON b.category_id = c.id
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND DATE_TRUNC(
+              CASE b.period_type WHEN 'monthly' THEN 'month' WHEN 'weekly' THEN 'week' WHEN 'yearly' THEN 'year' END,
+              t.date AT TIME ZONE 'UTC'
+            ) = DATE_TRUNC(
+              CASE b.period_type WHEN 'monthly' THEN 'month' WHEN 'weekly' THEN 'week' WHEN 'yearly' THEN 'year' END,
+              b.start_date AT TIME ZONE 'UTC'
+            )
+      WHERE b.user_id = $1
+      GROUP BY b.id, c.name, b.limit_cents
+      ORDER BY b.limit_cents DESC
+      LIMIT 5
+    `,
+      [userId]
+    );
 
-      // Get budgets summary
-      const budgetsResult = await client.query(
-        `
-        SELECT
-          name as category_name,
-          limit_amount,
-          COALESCE((SELECT SUM(amount) FROM transactions
-            WHERE user_id = $1 AND category = budgets.name
-            AND DATE_TRUNC('month', date) = DATE_TRUNC('month', NOW())), 0) as spent
-        FROM budgets
-        WHERE user_id = $1
-        ORDER BY limit_amount DESC
-        LIMIT 5
-      `,
-        [userId]
-      );
+    // Savings goals
+    const goalsResult = await client.query(
+      `
+      SELECT id, name, target_cents, current_cents, deadline, monthly_contribution_cents
+      FROM goals
+      WHERE user_id = $1
+      ORDER BY deadline ASC
+    `,
+      [userId]
+    );
 
-      // Get savings goals
-      const goalsResult = await client.query(
-        `
-        SELECT id, name, target_amount, current_amount, deadline, monthly_contribution
-        FROM savings_goals
-        WHERE user_id = $1 AND status = 'active'
-        ORDER BY deadline ASC
-      `,
-        [userId]
-      );
+    // Widgets derived from recurring transactions (backend-spec §1) - no dedicated table
+    const recurringResult = await client.query(
+      `
+      SELECT t.id, t.date, c.name as category_name, t.amount_cents, t.notes, t.recurrence_rule
+      FROM transactions t
+      JOIN accounts a ON t.account_id = a.id
+      JOIN categories c ON t.category_id = c.id
+      WHERE a.user_id = $1 AND t.recurring = true
+      ORDER BY t.date DESC
+      LIMIT 20
+    `,
+      [userId]
+    );
 
-      return {
-        kpis: {
-          totalBalance: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
-          monthlyIncome,
-          monthlyExpenses,
-          savings: monthlyIncome - monthlyExpenses,
-          netWorth: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
-        },
-        budgetsSummary: {
-          topBudgets: budgetsResult.rows.map((row) => ({
-            categoryName: row.category_name,
-            limit: parseInt(row.limit_amount),
-            spent: parseInt(row.spent),
-            status:
-              parseInt(row.spent) > parseInt(row.limit_amount)
-                ? 'overBudget'
-                : parseInt(row.spent) > parseInt(row.limit_amount) * 0.8
-                  ? 'nearLimit'
-                  : 'onTrack',
-          })),
-        },
-        goalsSummary: {
-          activeGoals: goalsResult.rows.length,
-          goals: goalsResult.rows.map((row) => ({
-            name: row.name,
-            target: parseInt(row.target_amount),
-            current: parseInt(row.current_amount),
-            progress: (parseInt(row.current_amount) / parseInt(row.target_amount)) * 100,
-            deadline: row.deadline,
-            monthlyContribution: parseInt(row.monthly_contribution),
-          })),
-        },
-        recentTransactions: txResult.rows.map((row) => ({
-          id: row.id,
-          date: row.date,
-          category: row.category,
-          amount: parseInt(row.amount),
-          notes: row.notes,
-          type: row.type,
+    return {
+      kpis: {
+        totalBalance: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
+        monthlyIncome,
+        monthlyExpenses,
+        savings: monthlyIncome - monthlyExpenses,
+        netWorth: parseInt(kpiRow.total_income) - parseInt(kpiRow.total_expenses),
+      },
+      budgetsSummary: {
+        topBudgets: budgetsResult.rows.map((row) => ({
+          categoryName: row.category_name,
+          limit: parseInt(row.limit_cents),
+          spent: parseInt(row.spent_cents),
+          status:
+            parseInt(row.spent_cents) >= parseInt(row.limit_cents)
+              ? 'overBudget'
+              : parseInt(row.spent_cents) >= parseInt(row.limit_cents) * 0.85
+                ? 'nearLimit'
+                : 'onTrack',
         })),
-      };
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Database query for dashboard failed:', error);
-    throw error;
+      },
+      goalsSummary: {
+        activeGoals: goalsResult.rows.length,
+        goals: goalsResult.rows.map((row) => ({
+          name: row.name,
+          target: parseInt(row.target_cents),
+          current: parseInt(row.current_cents),
+          progress: Math.round((parseInt(row.current_cents) / parseInt(row.target_cents)) * 100),
+          deadline: row.deadline,
+          monthlyContribution: parseInt(row.monthly_contribution_cents),
+        })),
+      },
+      recentTransactions: txResult.rows.map((row) => ({
+        id: row.id,
+        date: row.date,
+        category: row.category_name,
+        amount: parseInt(row.amount_cents),
+        notes: row.notes,
+        type: row.type,
+      })),
+      upcomingBills: recurringResult.rows.map((row) => ({
+        date: row.date,
+        amount: parseInt(row.amount_cents),
+        category: row.category_name,
+        notes: row.notes,
+      })),
+      subscriptions: recurringResult.rows
+        .filter((row) => row.category_name?.toLowerCase().includes('subscription'))
+        .map((row) => ({
+          name: row.category_name,
+          amount: parseInt(row.amount_cents),
+          frequency: row.recurrence_rule,
+        })),
+    };
+  } finally {
+    client.release();
   }
 }

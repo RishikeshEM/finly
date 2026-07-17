@@ -121,12 +121,15 @@ export async function enqueueExportJob(
 }
 
 /**
- * Poll status of an export job
+ * Poll status of an export job. Scoped to the requesting user: job IDs are
+ * otherwise guessable, and the export contents belong to whoever created them.
  */
-export async function getExportJobStatus(jobId: string): Promise<any> {
+export async function getExportJobStatus(jobId: string, requestingUserId: string): Promise<any> {
   const job = await reportExportQueue.getJob(jobId);
 
-  if (!job) {
+  if (!job || job.data.userId !== requestingUserId) {
+    // Same error for "doesn't exist" and "belongs to someone else" - don't reveal
+    // that a job with this ID exists for a different user.
     throw new Error('Job not found');
   }
 

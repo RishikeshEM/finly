@@ -31,10 +31,17 @@ goalsRouter.post('/', async (req: AuthRequest, res: Response) => {
 
 goalsRouter.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const goal = await updateGoal(req.user!.userId, req.params.id, req.body);
+    const { version, ...updates } = req.body;
+
+    if (version === undefined || version === null) {
+      return res.status(400).json({ error: 'version is required to detect concurrent updates' });
+    }
+
+    const goal = await updateGoal(req.user!.userId, req.params.id, updates, version);
     res.json(goal);
   } catch (error) {
-    res.status((error as Error).message.includes('not found') ? 404 : 400).json({ error: (error as Error).message });
+    const msg = (error as Error).message;
+    res.status(msg.includes('not found') ? 404 : msg.includes('modified') ? 409 : 400).json({ error: msg });
   }
 });
 
@@ -43,6 +50,7 @@ goalsRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
     await deleteGoal(req.user!.userId, req.params.id);
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    const msg = (error as Error).message;
+    res.status(msg.includes('not found') ? 404 : 500).json({ error: msg });
   }
 });

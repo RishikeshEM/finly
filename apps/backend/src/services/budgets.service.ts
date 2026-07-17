@@ -55,6 +55,9 @@ export async function getBudgets(userId: string): Promise<Budget[]> {
 }
 
 export async function getBudgetStatus(userId: string): Promise<any[]> {
+  // DATE_TRUNC's field argument only recognizes 'month'/'week'/'year', not the
+  // schema's 'monthly'/'weekly'/'yearly' period_type values - map between them
+  // per-row via CASE rather than passing period_type straight through.
   const result = await pool.query(
     `SELECT b.id, b.category_id, b.limit_cents,
             COALESCE(SUM(t.amount_cents), 0) as spent_cents,
@@ -65,7 +68,13 @@ export async function getBudgetStatus(userId: string): Promise<any[]> {
             END as status
      FROM budgets b
      LEFT JOIN transactions t ON b.category_id = t.category_id
-       AND DATE_TRUNC(b.period_type, t.date AT TIME ZONE $2) = DATE_TRUNC(b.period_type, b.start_date AT TIME ZONE $2)
+       AND DATE_TRUNC(
+             CASE b.period_type WHEN 'monthly' THEN 'month' WHEN 'weekly' THEN 'week' WHEN 'yearly' THEN 'year' END,
+             t.date AT TIME ZONE $2
+           ) = DATE_TRUNC(
+             CASE b.period_type WHEN 'monthly' THEN 'month' WHEN 'weekly' THEN 'week' WHEN 'yearly' THEN 'year' END,
+             b.start_date AT TIME ZONE $2
+           )
      WHERE b.user_id = $1
      GROUP BY b.id, b.category_id, b.limit_cents`,
     [userId, 'UTC']
@@ -77,9 +86,13 @@ export async function getBudgetStatus(userId: string): Promise<any[]> {
 export async function updateBudget(
   userId: string,
   budgetId: string,
-  limitCents?: number,
-  expectedVersion?: number
+  limitCents: number | undefined,
+  expectedVersion: number
 ): Promise<Budget> {
+  if (expectedVersion === undefined || expectedVersion === null) {
+    throw new Error('version is required to detect concurrent updates');
+  }
+
   const client = await pool.connect();
 
   try {
@@ -94,7 +107,7 @@ export async function updateBudget(
 
     const current = getCurrentResult.rows[0];
 
-    if (expectedVersion !== undefined && current.version !== expectedVersion) {
+    if (current.version !== expectedVersion) {
       throw new Error('Budget was modified by another request. Please refresh and retry.');
     }
 
@@ -125,7 +138,11 @@ export async function updateBudget(
 }
 
 export async function deleteBudget(userId: string, budgetId: string): Promise<void> {
-  await pool.query(`DELETE FROM budgets WHERE id = $1 AND user_id = $2`, [budgetId, userId]);
+  const result = await pool.query(`DELETE FROM budgets WHERE id = $1 AND user_id = $2`, [budgetId, userId]);
+
+  if (result.rowCount === 0) {
+    throw new Error('Budget not found');
+  }
 
   await pool.query(
     `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)

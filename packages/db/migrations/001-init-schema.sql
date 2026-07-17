@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "hstore";
 -- Unique: email
 -- Auth identity + profile (currency, country, timezone, role, notification prefs, MFA state)
 -- Soft-delete support for GDPR
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255), -- nullable if OAuth-only
@@ -38,7 +38,7 @@ CREATE INDEX idx_users_deleted_at ON users(deleted_at);
 -- FK: user_id -> users(id)
 -- A user's financial accounts (cash/bank/card)
 -- MVP: manual-entry only, no Bank Sync
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL, -- e.g. "Checking", "Savings", "Credit Card"
@@ -55,7 +55,7 @@ CREATE INDEX idx_accounts_user_id ON accounts(user_id);
 -- System defaults + user-custom categories
 -- Seeded with: Food, Transportation, Shopping, Healthcare, Entertainment, Education,
 --              Bills, Travel, Insurance, Rent, Utilities, Investments, Miscellaneous
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID, -- NULL means system default category
     name VARCHAR(100) NOT NULL,
@@ -77,7 +77,7 @@ CREATE INDEX idx_categories_name ON categories(name);
 --   - Historical pagination: (account_id, date)
 --   - Widget derivation (subscriptions/bills): (user_id, recurring, category_id)
 --     user_id derived via account -> user FK chain
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
@@ -103,7 +103,7 @@ CREATE INDEX idx_transactions_category_id ON transactions(category_id);
 -- FK: category_id -> categories(id)
 -- Period-based budgets (monthly/weekly/yearly) with optimistic-concurrency support
 -- version column for detecting concurrent writes
-CREATE TABLE budgets (
+CREATE TABLE IF NOT EXISTS budgets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
@@ -123,7 +123,7 @@ CREATE INDEX idx_budgets_category_id ON budgets(category_id);
 -- FK: user_id -> users(id)
 -- Savings goals with deadline and monthly contribution tracking
 -- version column for detecting concurrent writes
-CREATE TABLE goals (
+CREATE TABLE IF NOT EXISTS goals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -145,7 +145,7 @@ CREATE INDEX idx_goals_user_id ON goals(user_id);
 -- Channel: email, push, SMS
 -- payload: JSONB for flexible notification context
 -- Tracks sent_at and read_at for delivery confirmation + user engagement
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL CHECK (type IN (
@@ -174,7 +174,7 @@ CREATE INDEX idx_notifications_read_at ON notifications(read_at);
 -- Subscription tier definitions (Free, Pro, Family)
 -- stripe_price_id: ties to Stripe pricing API
 -- feature_flags: JSONB for per-plan feature gates (e.g. "max_accounts", "reports_export", "shared_budgets")
-CREATE TABLE plans (
+CREATE TABLE IF NOT EXISTS plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(50) NOT NULL UNIQUE CHECK (name IN ('free', 'pro', 'family')),
     stripe_price_id VARCHAR(255), -- Stripe API price ID, NULL for free tier
@@ -193,7 +193,7 @@ CREATE INDEX idx_plans_name ON plans(name);
 -- stripe_subscription_id: tracks active subscription
 -- status: pending, active, cancelled, failed
 -- amount_cents: captured payment amount (integer for financial correctness)
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
@@ -218,7 +218,7 @@ CREATE INDEX idx_payments_stripe_subscription_id ON payments(stripe_subscription
 -- diff: JSONB containing before/after values (for updates) or full object (for create/delete)
 -- GDPR compliance: user_id can be NULL if the user is deleted; PII from users table is scrubbed,
 --                  but audit_logs row remains with anonymized user_id reference
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID, -- nullable for system-initiated actions or deleted users
     action VARCHAR(20) NOT NULL CHECK (action IN ('create', 'update', 'delete')),

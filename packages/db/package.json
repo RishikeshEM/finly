@@ -1,0 +1,29 @@
+{
+  "name": "@finly/db",
+  "version": "1.0.0",
+  "description": "PostgreSQL database schema, migrations, and client for Finly",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "migrate": "ts-node src/migrate.ts up",
+    "migrate:status": "ts-node src/migrate.ts status",
+    "migrate:down": "ts-node src/migrate.ts down",
+    "db:seed": "ts-node src/seed.ts",
+    "db:reset": "npm run migrate:down && npm run migrate",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "AlignMinds",
+  "license": "MIT"
+}

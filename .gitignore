@@ -1,0 +1,31 @@
+# --- fleet-init: minimal stack-agnostic base ---
+.fleet/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+.env.local
+
+# --- stack-selection: frontend (nextjs) ---
+node_modules/
+.next/
+out/
+coverage/
+*.local
+
+# --- stack-selection: backend (node-express) ---
+dist/
+.env
+*.log
+
+# --- stack-selection: database (postgres) ---
+*.sql.bak
+pgdata/
+
+# --- am-scaffold-devops: infra (aws) — pass 3 of 3 ---
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars.secret
+.terraform.lock.hcl

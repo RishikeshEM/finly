@@ -97,10 +97,7 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Refresh token required' });
     }
 
-    // Verify and get payload from refresh token
-    const payload = verifyAccessToken(refreshToken);
-
-    // Issue new access token
+    // Issue new access token (refreshAccessToken handles token verification internally)
     const newAccessToken = refreshAccessToken(refreshToken);
 
     res.status(200).json({

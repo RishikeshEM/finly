@@ -12,6 +12,14 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret
 const ACCESS_TOKEN_EXPIRES = '15m';
 const REFRESH_TOKEN_EXPIRES = '7d';
 
+// Validate JWT secrets in production
+if (process.env.NODE_ENV === 'production') {
+  if (JWT_ACCESS_SECRET === 'dev-secret-change-me-min-32-chars' ||
+      JWT_REFRESH_SECRET === 'dev-refresh-secret-change-me-min-32') {
+    throw new Error('FATAL: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set in production environment');
+  }
+}
+
 export interface User {
   id: string;
   email: string;
@@ -31,6 +39,14 @@ export interface AuthPayload {
 }
 
 /**
+ * Validate email format
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+/**
  * Register a new user with email/password
  */
 export async function registerUser(email: string, password: string): Promise<User & TokenPair> {
@@ -40,6 +56,10 @@ export async function registerUser(email: string, password: string): Promise<Use
     // Validate input
     if (!email || !password) {
       throw new Error('Email and password required');
+    }
+
+    if (!isValidEmail(email)) {
+      throw new Error('Invalid email format');
     }
 
     if (password.length < 8) {
@@ -74,9 +94,9 @@ export async function registerUser(email: string, password: string): Promise<Use
 
     // Audit log
     await client.query(
-      `INSERT INTO audit_logs (user_id, action, resource_type, details, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [user.id, 'user_created', 'user', JSON.stringify({ email })]
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, 'create', 'user', user.id, JSON.stringify({ email })]
     );
 
     return {
@@ -115,11 +135,11 @@ export async function loginUser(email: string, password: string): Promise<User &
     // Compare password
     const passwordMatches = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatches) {
-      // Audit log: failed login attempt
+      // Audit log: failed login attempt (system-initiated, no user_id)
       await client.query(
-        `INSERT INTO audit_logs (user_id, action, resource_type, details, created_at)
-         VALUES (NULL, $1, $2, $3, NOW())`,
-        ['login_failed', 'auth', JSON.stringify({ email, reason: 'invalid_password' })]
+        `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)
+         VALUES (NULL, $1, $2, $3, $4)`,
+        ['update', 'user', user.id, JSON.stringify({ event: 'login_failed', email })]
       );
       throw new Error('Invalid credentials');
     }
@@ -127,11 +147,11 @@ export async function loginUser(email: string, password: string): Promise<User &
     // Issue tokens
     const tokens = issueTokens({ userId: user.id, email: user.email });
 
-    // Audit log: successful login
+    // Audit log: successful login (update action for login event)
     await client.query(
-      `INSERT INTO audit_logs (user_id, action, resource_type, details, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [user.id, 'login_success', 'auth', JSON.stringify({ email })]
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, diff)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, 'update', 'user', user.id, JSON.stringify({ event: 'login_success' })]
     );
 
     return {

@@ -24,8 +24,8 @@ transactionsRouter.get('/', async (req: AuthRequest, res: Response) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const transactions = await getTransactions(userId, limit, offset);
-    res.status(200).json({ transactions, pagination: { limit, offset } });
+    const { transactions, total } = await getTransactions(userId, limit, offset);
+    res.status(200).json({ transactions, pagination: { limit, offset, total } });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

@@ -99,20 +99,31 @@ export async function createTransaction(
 }
 
 /**
- * Get transactions for user's accounts
+ * Get transactions for user's accounts, with a total count for pagination
+ * (frontend needs this to detect a deep link past the last page, FE-EC-09).
  */
-export async function getTransactions(userId: string, limit: number = 50, offset: number = 0): Promise<Transaction[]> {
-  const result = await pool.query(
-    `SELECT t.id, t.account_id, t.category_id, t.type, t.amount_cents, t.date, t.notes, t.payment_method, t.recurring, t.recurrence_rule
-     FROM transactions t
-     JOIN accounts a ON t.account_id = a.id
-     WHERE a.user_id = $1
-     ORDER BY t.date DESC
-     LIMIT $2 OFFSET $3`,
-    [userId, limit, offset]
-  );
+export async function getTransactions(
+  userId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<{ transactions: Transaction[]; total: number }> {
+  const [result, countResult] = await Promise.all([
+    pool.query(
+      `SELECT t.id, t.account_id, t.category_id, t.type, t.amount_cents, t.date, t.notes, t.payment_method, t.recurring, t.recurrence_rule
+       FROM transactions t
+       JOIN accounts a ON t.account_id = a.id
+       WHERE a.user_id = $1
+       ORDER BY t.date DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    ),
+    pool.query(
+      `SELECT COUNT(*) as total FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE a.user_id = $1`,
+      [userId]
+    ),
+  ]);
 
-  return result.rows;
+  return { transactions: result.rows, total: parseInt(countResult.rows[0].total) };
 }
 
 /**

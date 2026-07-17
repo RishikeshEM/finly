@@ -23,7 +23,7 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-8">
+      <div className="space-y-8">
         <div className="grid grid-cols-5 gap-6">
           {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i} className="h-28 animate-pulse" />
@@ -36,11 +36,9 @@ export function Dashboard() {
 
   if (isError || !data) {
     return (
-      <div className="p-8">
-        <Card>
-          <EmptyState icon="⚠️" title="Couldn't load dashboard" description="Please try refreshing the page." />
-        </Card>
-      </div>
+      <Card>
+        <EmptyState icon="⚠️" title="Couldn't load dashboard" description="Please try refreshing the page." />
+      </Card>
     );
   }
 
@@ -52,15 +50,13 @@ export function Dashboard() {
   if (!hasAnyData) {
     // FE-EC-01: zero transactions/budgets/goals on first run
     return (
-      <div className="p-8">
-        <Card>
-          <EmptyState
-            icon="👋"
-            title="Welcome to Finly!"
-            description="Add your first transaction, budget, or savings goal to see your dashboard come to life."
-          />
-        </Card>
-      </div>
+      <Card>
+        <EmptyState
+          icon="👋"
+          title="Welcome to Finly!"
+          description="Add your first transaction, budget, or savings goal to see your dashboard come to life."
+        />
+      </Card>
     );
   }
 
@@ -75,7 +71,7 @@ export function Dashboard() {
     .map((b) => ({ name: b.categoryName, value: b.spent / 100 }));
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="space-y-8">
       {/* KPI Cards Row */}
       <div className="grid grid-cols-5 gap-6">
         <KPICard label="Total Balance" value={formatCents(kpis.totalBalance, currency)} />

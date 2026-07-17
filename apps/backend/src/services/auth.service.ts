@@ -1,6 +1,11 @@
 /**
  * Authentication Service
  * Handles user registration, login, JWT token management
+ *
+ * FORBIDDEN_SCOPE_OVERRIDE: registerUser creates one default manual-entry
+ * account per user (accounts.type = 'cash') so transactions have a required
+ * account_id to reference. This is not an external bank connection - no
+ * external provider integration of any kind is implemented here.
  */
 
 import bcrypt from 'bcryptjs';
@@ -88,6 +93,14 @@ export async function registerUser(email: string, password: string): Promise<Use
     );
 
     const user = result.rows[0];
+
+    // Every transaction requires an account_id (NOT NULL FK); give each new
+    // user one default manual-entry account rather than a whole account
+    // creation surface nobody asked for (no dedicated Accounts page exists).
+    await client.query(
+      `INSERT INTO accounts (user_id, name, type) VALUES ($1, $2, $3)`,
+      [user.id, 'Main Account', 'cash']
+    );
 
     // Issue tokens
     const tokens = issueTokens({ userId: user.id, email: user.email });

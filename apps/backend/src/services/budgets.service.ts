@@ -4,6 +4,7 @@
  */
 
 import { pool } from '../db';
+import { invalidateDashboardCache } from './cache.service';
 
 export interface Budget {
   id: string;
@@ -37,6 +38,8 @@ export async function createBudget(
      VALUES ($1, $2, $3, $4, $5)`,
     [userId, 'create', 'budget', budget.id, JSON.stringify({ period_type: periodType, limit_cents: limitCents })]
   );
+
+  await invalidateDashboardCache(userId);
 
   return budget;
 }
@@ -113,6 +116,8 @@ export async function updateBudget(
       [userId, 'update', 'budget', budgetId, JSON.stringify({ limit_cents: { from: current.limit_cents, to: limitCents } })]
     );
 
+    await invalidateDashboardCache(userId);
+
     return updated;
   } finally {
     client.release();
@@ -127,4 +132,6 @@ export async function deleteBudget(userId: string, budgetId: string): Promise<vo
      VALUES ($1, $2, $3, $4, $5)`,
     [userId, 'delete', 'budget', budgetId, JSON.stringify({})]
   );
+
+  await invalidateDashboardCache(userId);
 }

@@ -4,6 +4,7 @@
  */
 
 import { pool } from '../db';
+import { invalidateDashboardCache } from './cache.service';
 
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR'];
 
@@ -78,6 +79,8 @@ export async function createTransaction(
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, 'create', 'transaction', transaction.id, JSON.stringify({ type, amount_cents: amountCents, category_id: categoryId })]
     );
+
+    await invalidateDashboardCache(userId);
 
     return transaction;
   } finally {
@@ -166,6 +169,8 @@ export async function updateTransaction(
       [userId, 'update', 'transaction', transactionId, JSON.stringify(updates)]
     );
 
+    await invalidateDashboardCache(userId);
+
     return transaction;
   } finally {
     client.release();
@@ -199,6 +204,8 @@ export async function deleteTransaction(userId: string, transactionId: string): 
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, 'delete', 'transaction', transactionId, JSON.stringify({})]
     );
+
+    await invalidateDashboardCache(userId);
   } finally {
     client.release();
   }

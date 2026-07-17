@@ -23,8 +23,10 @@
 import { Router, Request, Response } from 'express';
 import { createClient } from 'redis';
 import { pool } from '../db';
+import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 
 export const dashboardRouter = Router();
+dashboardRouter.use(authMiddleware);
 
 // Redis client - will gracefully degrade if unavailable
 const redisClient = createClient({
@@ -75,9 +77,9 @@ redisClient.on('error', (err) => {
  *
  * Latency target (backend-spec §4.1): p95 < 500ms
  */
-dashboardRouter.get('/', async (req: Request, res: Response) => {
+dashboardRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

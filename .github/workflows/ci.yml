@@ -328,6 +328,16 @@ jobs:
         run: |
           cd packages/db
           npm run migrate
+        continue-on-error: false
+
+      - name: Rollback Infrastructure on Migration Failure
+        if: failure() && github.event_name == 'push'
+        run: |
+          cd infrastructure/terraform
+          echo "Database migration failed - rolling back infrastructure changes"
+          terraform destroy -auto-approve \
+            -var-file=${{ steps.env.outputs.tfvars }} \
+            -var="database_password=${{ secrets.DB_PASSWORD_DEPLOYMENT }}"
 
       - name: Terraform Output
         run: |

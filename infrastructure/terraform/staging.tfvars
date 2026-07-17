@@ -36,9 +36,12 @@ log_retention_days = 7
 
 # Secrets - Must be provided via terraform variable or AWS Secrets Manager
 # DO NOT hardcode real secrets here - use environment variables
-database_password  = "" # Set via: export TF_VAR_database_password="value"
-jwt_access_secret  = "staging_jwt_access_secret_changeme"
-jwt_refresh_secret = "staging_jwt_refresh_secret_changeme"
+# Set via: export TF_VAR_database_password="value"
+# Set via: export TF_VAR_jwt_access_secret="value"
+# Set via: export TF_VAR_jwt_refresh_secret="value"
+database_password  = ""
+jwt_access_secret  = ""
+jwt_refresh_secret = ""
 
 # OAuth - Staging credentials
 # Obtain from Google Cloud Console, Apple Developer Portal

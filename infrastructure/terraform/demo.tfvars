@@ -36,9 +36,12 @@ log_retention_days = 1
 
 # Secrets - Provided via environment variables (TF_VAR_database_password, etc.)
 # NEVER hardcode passwords here
-database_password  = "" # Set via: export TF_VAR_database_password="value"
-jwt_access_secret  = "demo_jwt_access_secret_change_me_min_32_chars"
-jwt_refresh_secret = "demo_jwt_refresh_secret_change_me_min_32_chars"
+# Set via: export TF_VAR_database_password="value"
+# Set via: export TF_VAR_jwt_access_secret="value"
+# Set via: export TF_VAR_jwt_refresh_secret="value"
+database_password  = ""
+jwt_access_secret  = ""
+jwt_refresh_secret = ""
 
 # OAuth - Demo app credentials (replace with real values)
 google_client_id     = ""
